@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../constants.dart';
 import '../services/auth_state_manager.dart';
-import '../widgets/login_modal.dart';
-import '../widgets/menu_modal.dart';
-import '../pages/profile_page.dart';
 
 class AppHeader extends StatelessWidget {
   final bool isScrolled;
@@ -60,7 +57,7 @@ class AppHeader extends StatelessWidget {
                     color: Colors.transparent,
                   ),
                 ),
-                onPressed: onMenuTap ?? () => MenuModal.show(context),
+                onPressed: onMenuTap,
               ),
               // Логотип по центру
               SvgPicture.asset(
@@ -164,30 +161,7 @@ class AppHeader extends StatelessWidget {
                     Container(width: 20, height: 20, color: Colors.transparent),
               ),
             ),
-      onPressed: onProfileTap ??
-          () {
-            if (!isAuthenticated) {
-              showModalBottomSheet(
-                context: context,
-                backgroundColor: Colors.transparent,
-                isScrollControlled: true,
-                builder: (context) => const LoginModal(),
-              ).then((result) {
-                if (result != null && context.mounted) {
-                  // Обновляем UI после авторизации
-                  // Используем setState через родительский виджет
-                }
-              });
-            } else {
-              // Если пользователь авторизован, переходим на страницу профиля
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ProfilePage(),
-                ),
-              );
-            }
-          },
+      onPressed: onProfileTap,
     );
   }
 }

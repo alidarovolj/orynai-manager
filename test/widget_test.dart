@@ -20,7 +20,7 @@ void main() {
         path: 'assets/translations',
         fallbackLocale: const Locale('ru'),
         startLocale: const Locale('ru'),
-        child: const MyApp(),
+        child: const ManagerApp(),
       ),
     );
 

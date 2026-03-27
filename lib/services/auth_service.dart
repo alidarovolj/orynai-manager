@@ -1,38 +1,28 @@
+import 'package:flutter/foundation.dart';
 import 'api_service.dart';
 
 class AuthService {
   final ApiService _apiService = ApiService();
 
-  // Отправка OTP кода на WhatsApp
+  /// Отправка OTP-кода в WhatsApp.
+  /// Возвращает 'OK' при успехе.
   Future<String> sendOtpWhatsApp(String phone) async {
-    try {
-      final result = await _apiService.post(
-        '/api/v2/otp/whatsapp/send',
-        body: {'phone': phone},
-      );
+    final result = await _apiService.post(
+      '/api/v2/otp/whatsapp/send',
+      body: {'phone': phone},
+    );
 
-      if (result is Map && result['data'] != null) {
-        final responseBody = result['data'].toString();
-        if (responseBody == 'OK' || responseBody.isEmpty) {
-          return 'OK';
-        }
-        return responseBody;
-      }
-
-      final responseBody = result.toString();
-      if (responseBody == 'OK' || responseBody.isEmpty) {
-        return 'OK';
-      }
-      return responseBody;
-    } catch (e) {
-      if (e is ApiException) {
-        throw Exception('Failed to send OTP: ${e.message}');
-      }
-      throw Exception('Error sending OTP: $e');
+    if (result is Map && result['data'] != null) {
+      final body = result['data'].toString();
+      return (body == 'OK' || body.isEmpty) ? 'OK' : body;
     }
+    final body = result.toString();
+    return (body == 'OK' || body.isEmpty) ? 'OK' : body;
   }
 
-  // Верификация OTP кода
+  /// Верификация OTP-кода.
+  /// Возвращает map с полями: success, token, data, needsRegistration.
+  /// После вызова этого метода дополнительных запросов не делается.
   Future<Map<String, dynamic>> verifyOtpWhatsApp(
     String phone,
     String code,
@@ -43,31 +33,41 @@ class AuthService {
         body: {'phone': phone, 'code': code},
       );
 
-      // Проверяем, является ли ошибка "Role not found"
-      if (result is Map<String, dynamic> &&
-          result['errorCode'] == 500 &&
-          result['description']?.toString().contains('Role not found') ==
-              true) {
-        return {'success': false, 'needsRegistration': true, 'error': result};
-      }
-
-      // Токен может быть в корне ответа или в data
       if (result is Map<String, dynamic>) {
+        // Ошибка "Role not found"
+        if (result['errorCode'] == 500 &&
+            result['description']?.toString().contains('Role not found') ==
+                true) {
+          return {
+            'success': false,
+            'needsRegistration': true,
+            'error': result,
+          };
+        }
+
+        final token =
+            result['token']?.toString() ?? result['data']?['token']?.toString();
+
         return {
           'success': true,
+          'token': token ?? '',
           'data': result,
-          'token': result['token'] ?? result['data']?['token'],
+          'needsRegistration': false,
         };
       }
 
-      return {'success': true, 'data': result, 'token': null};
+      return {'success': false, 'error': 'Неверный ответ сервера'};
     } catch (e) {
+      debugPrint('verifyOtpWhatsApp error: $e');
       if (e is ApiException) {
-        // Проверяем, является ли ошибка "Role not found"
         if (e.body?['errorCode'] == 500 &&
             e.body?['description']?.toString().contains('Role not found') ==
                 true) {
-          return {'success': false, 'needsRegistration': true, 'error': e.body};
+          return {
+            'success': false,
+            'needsRegistration': true,
+            'error': e.body,
+          };
         }
         return {
           'success': false,
@@ -75,75 +75,7 @@ class AuthService {
           'error': e.body ?? {'description': e.message},
         };
       }
-      throw Exception('Error verifying OTP: $e');
-    }
-  }
-
-  // Отправка запроса на получение данных по ИИН
-  Future<Map<String, dynamic>> sendIinRequest(String iin) async {
-    try {
-      final result = await _apiService.get(
-        '/rip-fcb/v1/individual/send/request',
-        queryParameters: {'iin': iin},
-      );
-      if (result is Map<String, dynamic>) {
-        return result;
-      }
-      return {'data': result};
-    } catch (e) {
-      if (e is ApiException) {
-        throw Exception('Failed to send IIN request: ${e.message}');
-      }
-      throw Exception('Error sending IIN request: $e');
-    }
-  }
-
-  // Регистрация пользователя через WhatsApp
-  Future<Map<String, dynamic>> signupWhatsApp({
-    required String phone,
-    required String code,
-    required String iin,
-    required String name,
-    required String surname,
-    required String patronymic,
-  }) async {
-    try {
-      final result = await _apiService.put(
-        '/api/v2/user/signup/whatsapp',
-        body: {
-          'whatsappOTP': {'phone': phone, 'code': code},
-          'iin': iin,
-          'name': name,
-          'surname': surname,
-          'patronymic': patronymic,
-        },
-      );
-      // PUT метод всегда возвращает Map<String, dynamic>
-      return result;
-    } catch (e) {
-      if (e is ApiException) {
-        throw Exception('Failed to signup: ${e.message}');
-      }
-      throw Exception('Error during signup: $e');
-    }
-  }
-
-  // Получение данных текущего пользователя
-  Future<Map<String, dynamic>> getCurrentUser(String token) async {
-    try {
-      // Временно устанавливаем токен для этого запроса
-      // (в будущем можно улучшить ApiService для поддержки передачи токена напрямую)
-      final result = await _apiService.get(
-        '/api/v2/user/current',
-        requiresAuth: true,
-      );
-      // GET метод для /user/current всегда возвращает Map<String, dynamic>
-      return result as Map<String, dynamic>;
-    } catch (e) {
-      if (e is ApiException) {
-        throw Exception('Failed to get user: ${e.message}');
-      }
-      throw Exception('Error getting user: $e');
+      rethrow;
     }
   }
 }

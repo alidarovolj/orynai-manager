@@ -1,0 +1,19 @@
+{
+  "plugins": {
+    "datadog": {
+      "enabled": true
+    },
+    "databricks-skills": {
+      "enabled": true
+    },
+    "parallel": {
+      "enabled": true
+    },
+    "cli-for-agent": {
+      "enabled": true
+    },
+    "continual-learning": {
+      "enabled": true
+    }
+  }
+}

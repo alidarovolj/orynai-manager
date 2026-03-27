@@ -10,7 +10,6 @@ import '../constants.dart';
 import '../models/cemetery.dart';
 import '../models/grave.dart';
 import '../services/cemetery_service.dart';
-import '../pages/booking_page.dart';
 
 // Alias для Flutter виджетов
 import 'package:flutter/material.dart' as flutter;
@@ -854,60 +853,6 @@ class _CemeteryDetailsModalState extends State<CemeteryDetailsModal> {
                           const flutter.SizedBox(height: 12),
                           // Информация о выбранном месте
                           _buildSelectedGraveInfo(),
-                          // Кнопка бронирования
-                          flutter.SizedBox(
-                            width: double.infinity,
-                            height: 44,
-                            child: flutter.ElevatedButton(
-                              onPressed:
-                                  _selectedGrave != null &&
-                                      _selectedGrave!.isFree
-                                  ? () {
-                                      Navigator.pop(context);
-                                      Navigator.push(
-                                        context,
-                                        flutter.MaterialPageRoute(
-                                          builder: (context) => BookingPage(
-                                            cemetery: widget.cemetery,
-                                            grave: _selectedGrave!,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  : null,
-                              style: flutter.ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.buttonBackground,
-                                disabledBackgroundColor: flutter.Colors.grey,
-                                shape: flutter.RoundedRectangleBorder(
-                                  borderRadius: flutter.BorderRadius.circular(
-                                    8,
-                                  ),
-                                ),
-                              ),
-                              child: flutter.Row(
-                                mainAxisAlignment:
-                                    flutter.MainAxisAlignment.center,
-                                children: [
-                                  const flutter.Icon(
-                                    flutter.Icons.edit,
-                                    size: 20,
-                                  ),
-                                  const flutter.SizedBox(width: 8),
-                                  flutter.Text(
-                                    _selectedGrave != null &&
-                                            _selectedGrave!.isFree
-                                        ? 'booking.details.bookPlace'.tr()
-                                        : 'booking.details.selectFreePlace'
-                                              .tr(),
-                                    style: const flutter.TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: flutter.FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),

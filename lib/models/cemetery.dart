@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class Cemetery {
   final int id;
   final String name;
@@ -70,4 +72,58 @@ class Cemetery {
   }
 
   bool get isClosed => freeSpaces == 0;
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'country': country,
+        'city': city,
+        'street_name': streetName,
+        'name_kz': nameKz,
+        'description_kz': descriptionKz,
+        'phone': phone,
+        'location_coords': jsonEncode(locationCoords),
+        'polygon_coordinates': jsonEncode(polygonCoordinates),
+        'religion': religion,
+        'burial_price': burialPrice,
+        'status': status,
+        'capacity': capacity,
+        'free_spaces': freeSpaces,
+        'reserved_spaces': reservedSpaces,
+        'occupied_spaces': occupiedSpaces,
+        'fetched_at': DateTime.now().toIso8601String(),
+      };
+
+  factory Cemetery.fromDbMap(Map<String, dynamic> map) {
+    final locCoords = (jsonDecode(map['location_coords'] as String) as List)
+        .map((e) => (e as num).toDouble())
+        .toList();
+    final polyCoords =
+        (jsonDecode(map['polygon_coordinates'] as String) as List)
+            .map((row) =>
+                (row as List).map((e) => (e as num).toDouble()).toList())
+            .toList();
+
+    return Cemetery(
+      id: map['id'] as int,
+      name: map['name'] as String,
+      description: map['description'] as String? ?? '',
+      country: map['country'] as String? ?? '',
+      city: map['city'] as String? ?? '',
+      streetName: map['street_name'] as String? ?? '',
+      nameKz: map['name_kz'] as String?,
+      descriptionKz: map['description_kz'] as String?,
+      phone: map['phone'] as String? ?? '',
+      locationCoords: locCoords,
+      polygonCoordinates: polyCoords,
+      religion: map['religion'] as String? ?? '',
+      burialPrice: map['burial_price'] as int? ?? 0,
+      status: map['status'] as String? ?? 'active',
+      capacity: map['capacity'] as int? ?? 0,
+      freeSpaces: map['free_spaces'] as int? ?? 0,
+      reservedSpaces: map['reserved_spaces'] as int? ?? 0,
+      occupiedSpaces: map['occupied_spaces'] as int? ?? 0,
+    );
+  }
 }
