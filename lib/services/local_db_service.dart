@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/burial_record.dart';
 import '../models/cemetery.dart';
+import '../models/grave.dart';
 import '../models/sync_item.dart';
 
 class LocalDbService {
@@ -23,7 +24,7 @@ class LocalDbService {
 
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -33,11 +34,17 @@ class LocalDbService {
     await _createBurialRecordsTable(db);
     await _createSyncQueueTable(db);
     await _createCemeteriesTable(db);
+    await _createGravesTable(db);
+    await _createAuditLogTable(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await _createCemeteriesTable(db);
+    }
+    if (oldVersion < 3) {
+      await _createGravesTable(db);
+      await _createAuditLogTable(db);
     }
   }
 
@@ -221,6 +228,46 @@ class LocalDbService {
     );
   }
 
+  Future<void> _createGravesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS graves (
+        id INTEGER PRIMARY KEY,
+        cemetery_id INTEGER NOT NULL,
+        cemetery_name TEXT,
+        sector_number TEXT,
+        row_number TEXT,
+        grave_number TEXT,
+        status TEXT DEFAULT 'free',
+        width INTEGER DEFAULT 0,
+        height INTEGER DEFAULT 0,
+        polygon_data TEXT NOT NULL,
+        cached_at TEXT
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_graves_cemetery ON graves(cemetery_id)',
+    );
+  }
+
+  Future<void> _createAuditLogTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT NOT NULL,
+        entity_type TEXT,
+        entity_id INTEGER,
+        details TEXT,
+        device_source TEXT NOT NULL DEFAULT 'tablet',
+        user_phone TEXT,
+        performed_at TEXT NOT NULL,
+        synced INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_audit_synced ON audit_log(synced)',
+    );
+  }
+
   // ─── Cemeteries ───────────────────────────────────────────────────────────
 
   /// Сохраняет список кладбищ (INSERT OR REPLACE).
@@ -256,6 +303,68 @@ class LocalDbService {
     );
     if (rows.isEmpty || rows.first['fetched_at'] == null) return null;
     return DateTime.tryParse(rows.first['fetched_at'] as String);
+  }
+
+  // ─── Graves ───────────────────────────────────────────────────────────────
+
+  Future<void> cacheGraves(int cemeteryId, List<Grave> graves) async {
+    final db = await database;
+    final batch = db.batch();
+    // Удаляем старый кэш этого кладбища
+    batch.delete('graves', where: 'cemetery_id = ?', whereArgs: [cemeteryId]);
+    for (final g in graves) {
+      batch.insert('graves', g.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+    debugPrint('[DB] Cached ${graves.length} graves for cemetery $cemeteryId');
+  }
+
+  Future<List<Grave>> getCachedGraves(int cemeteryId) async {
+    final db = await database;
+    final rows = await db.query(
+      'graves',
+      where: 'cemetery_id = ?',
+      whereArgs: [cemeteryId],
+    );
+    return rows.map(Grave.fromDbMap).toList();
+  }
+
+  // ─── Audit Log ────────────────────────────────────────────────────────────
+
+  Future<void> insertAuditLog({
+    required String action,
+    String? entityType,
+    int? entityId,
+    String? details,
+    String? userPhone,
+  }) async {
+    final db = await database;
+    await db.insert('audit_log', {
+      'action': action,
+      'entity_type': entityType,
+      'entity_id': entityId,
+      'details': details,
+      'device_source': 'tablet',
+      'user_phone': userPhone,
+      'performed_at': DateTime.now().toIso8601String(),
+      'synced': 0,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getUnsynedAuditLogs() async {
+    final db = await database;
+    return db.query('audit_log', where: 'synced = 0', orderBy: 'performed_at ASC');
+  }
+
+  Future<void> markAuditLogsSynced(List<int> ids) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    await db.update(
+      'audit_log',
+      {'synced': 1},
+      where: 'id IN (${ids.map((_) => '?').join(',')})',
+      whereArgs: ids,
+    );
   }
 
   // ─── Close ────────────────────────────────────────────────────────────────

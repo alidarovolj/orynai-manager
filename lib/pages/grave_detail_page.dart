@@ -4,6 +4,7 @@ import '../constants.dart';
 import '../models/burial_record.dart';
 import '../models/cemetery.dart';
 import '../models/grave.dart';
+import '../services/audit_service.dart';
 import '../services/local_db_service.dart';
 import '../services/location_service.dart';
 import '../services/sync_service.dart';
@@ -26,6 +27,7 @@ class _GraveDetailPageState extends State<GraveDetailPage> {
   final LocalDbService _db = LocalDbService();
   final LocationService _locationService = LocationService();
   final SyncService _syncService = SyncService();
+  final AuditService _audit = AuditService();
 
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -107,6 +109,15 @@ class _GraveDetailPageState extends State<GraveDetailPage> {
         _gpsFixedAt = DateTime.now();
       });
 
+      _audit.log(
+        action: AuditAction.fixCoordinates,
+        entityType: 'grave',
+        entityId: widget.grave.id,
+        details: 'lat=${position.latitude.toStringAsFixed(6)}'
+            ',lon=${position.longitude.toStringAsFixed(6)}'
+            ',acc=${position.accuracy.toStringAsFixed(1)}m',
+      );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -181,6 +192,13 @@ class _GraveDetailPageState extends State<GraveDetailPage> {
 
       final saved = await _syncService.saveBurialRecord(record);
       setState(() => _existingRecord = saved);
+
+      _audit.log(
+        action: AuditAction.saveGraveRecord,
+        entityType: 'grave',
+        entityId: widget.grave.id,
+        details: 'status=${saved.syncStatus.name},grave=${widget.grave.fullNumber}',
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

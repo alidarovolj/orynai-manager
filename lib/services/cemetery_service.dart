@@ -39,6 +39,8 @@ class CemeteryService {
 
   // ─── Могилы ───────────────────────────────────────────────────────────────
 
+  /// Загружает могилы: сначала пробует сеть, при ошибке возвращает кэш.
+  /// При успешной загрузке с сети — обновляет кэш.
   Future<List<Grave>> getGravesByCoordinates({
     required int cemeteryId,
     required double minX,
@@ -46,26 +48,47 @@ class CemeteryService {
     required double minY,
     required double maxY,
   }) async {
-    final result = await _apiService.get(
-      'https://orynai.kz/api/v1/graves/by-coordinates',
-      queryParameters: {
-        'min_x': minX.toString(),
-        'max_x': maxX.toString(),
-        'min_y': minY.toString(),
-        'max_y': maxY.toString(),
-        'cemetery_id': cemeteryId.toString(),
-      },
-    );
+    try {
+      final result = await _apiService.get(
+        'https://orynai.kz/api/v1/graves/by-coordinates',
+        queryParameters: {
+          'min_x': minX.toString(),
+          'max_x': maxX.toString(),
+          'min_y': minY.toString(),
+          'max_y': maxY.toString(),
+          'cemetery_id': cemeteryId.toString(),
+        },
+      );
 
-    if (result is List) {
-      return result
-          .map((j) => Grave.fromJson(j as Map<String, dynamic>))
-          .toList();
-    } else if (result is Map<String, dynamic> && result['data'] != null) {
-      return (result['data'] as List)
-          .map((j) => Grave.fromJson(j as Map<String, dynamic>))
-          .toList();
+      List<Grave> graves;
+      if (result is List) {
+        graves = result
+            .map((j) => Grave.fromJson(j as Map<String, dynamic>))
+            .toList();
+      } else if (result is Map<String, dynamic> && result['data'] != null) {
+        graves = (result['data'] as List)
+            .map((j) => Grave.fromJson(j as Map<String, dynamic>))
+            .toList();
+      } else {
+        throw Exception('Неверный формат ответа для могил');
+      }
+
+      // Кэшируем полученные могилы
+      await _db.cacheGraves(cemeteryId, graves);
+      return graves;
+    } catch (e) {
+      debugPrint('[CemeteryService] Network error loading graves: $e');
+      // Возвращаем кэш при ошибке сети
+      final cached = await _db.getCachedGraves(cemeteryId);
+      if (cached.isNotEmpty) {
+        debugPrint('[CemeteryService] Returning ${cached.length} cached graves');
+        return cached;
+      }
+      rethrow;
     }
-    throw Exception('Неверный формат ответа для могил');
   }
+
+  /// Возвращает только кэшированные могилы (без сетевого запроса).
+  Future<List<Grave>> getCachedGraves(int cemeteryId) =>
+      _db.getCachedGraves(cemeteryId);
 }

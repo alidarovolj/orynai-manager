@@ -222,132 +222,27 @@ class _ManagerLoginPageState extends State<ManagerLoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Используем MediaQuery.size — не меняется при открытии клавиатуры,
-    // поэтому макет не перестраивается и поле не теряет фокус.
     final screenSize = MediaQuery.of(context).size;
-    final isLandscape = screenSize.width > screenSize.height;
     final isTablet = screenSize.width > 600;
+    final isLandscape = screenSize.width > screenSize.height;
+
+    // Ширина карточки: на планшете ограничиваем, на телефоне — полная
+    final cardMaxWidth = isTablet ? (isLandscape ? 540.0 : 480.0) : double.infinity;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       resizeToAvoidBottomInset: true,
-      body: isTablet && isLandscape
-          ? _buildTabletLandscape(screenSize)
-          : _buildPortrait(screenSize, isTablet: isTablet),
-    );
-  }
-
-  // ── Планшет горизонталь: логотип слева, форма справа ──────────────────────
-
-  Widget _buildTabletLandscape(Size screenSize) {
-    final h = screenSize.height;
-    return Row(
-      children: [
-        // Левая панель — брендинг
-        Expanded(
-          flex: 4,
-          child: Container(
-            color: AppColors.buttonBackground,
-            padding: const EdgeInsets.all(48),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  'assets/images/logos/main.png',
-                  height: h * 0.18,
-                  errorBuilder: (_, __, ___) => SvgPicture.asset(
-                    'assets/images/logos/logo.svg',
-                    height: h * 0.18,
-                    colorFilter: const ColorFilter.mode(
-                      Colors.white,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                ),
-                SizedBox(height: h * 0.04),
-                Text(
-                  'Orynai Manager',
-                  style: TextStyle(
-                    fontSize: h * 0.055,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: h * 0.015),
-                Text(
-                  'Система управления кладбищем',
-                  style: TextStyle(
-                    fontSize: h * 0.028,
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontWeight: FontWeight.w400,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.symmetric(
+              horizontal: isTablet ? 32 : 24,
+              vertical: 40,
             ),
-          ),
-        ),
-        // Правая панель — форма
-        Expanded(
-          flex: 6,
-          child: Center(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                horizontal: screenSize.width * 0.06,
-                vertical: 32,
-              ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: cardMaxWidth),
               child: _buildFormCard(screenSize: screenSize),
             ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── Портрет / телефон: логотип + карточка по центру ───────────────────────
-
-  Widget _buildPortrait(Size screenSize, {required bool isTablet}) {
-    final w = screenSize.width;
-    final h = screenSize.height;
-    return SafeArea(
-      child: Center(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: isTablet ? w * 0.12 : 24,
-            vertical: 32,
-          ),
-          child: Column(
-            children: [
-              Image.asset(
-                'assets/images/logos/main.png',
-                height: h * 0.12,
-                errorBuilder: (_, __, ___) => SvgPicture.asset(
-                  'assets/images/logos/logo.svg',
-                  height: h * 0.12,
-                ),
-              ),
-              SizedBox(height: h * 0.02),
-              Text(
-                'Orynai Manager',
-                style: TextStyle(
-                  fontSize: isTablet ? 30 : 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.iconAndText,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Система управления кладбищем',
-                style: TextStyle(
-                  fontSize: isTablet ? 17 : 13,
-                  color: AppColors.iconAndText.withValues(alpha: 0.6),
-                ),
-              ),
-              SizedBox(height: h * 0.04),
-              _buildFormCard(screenSize: screenSize),
-            ],
           ),
         ),
       ),
@@ -362,44 +257,72 @@ class _ManagerLoginPageState extends State<ManagerLoginPage> {
     final isLandscape = w > h;
     final isTablet = w > 600;
 
-    // Размеры шрифтов и элементов масштабируются под экран
-    final titleSize = isTablet ? (isLandscape ? h * 0.045 : 28.0) : 20.0;
-    final labelSize = isTablet ? (isLandscape ? h * 0.028 : 17.0) : 14.0;
+    final logoHeight = isTablet ? (isLandscape ? h * 0.15 : h * 0.12) : h * 0.10;
+    final titleSize = isTablet ? (isLandscape ? h * 0.042 : 26.0) : 20.0;
+    final labelSize = isTablet ? (isLandscape ? h * 0.026 : 16.0) : 13.0;
     final inputFontSize = isTablet ? 20.0 : 16.0;
     final inputHeight = isTablet ? 64.0 : 52.0;
     final btnHeight = isTablet ? 70.0 : 56.0;
     final btnFontSize = isTablet ? 20.0 : 16.0;
-    final cardPadding = isTablet ? 40.0 : 24.0;
+    final cardPadding = isTablet ? 40.0 : 28.0;
 
     return Container(
       padding: EdgeInsets.all(cardPadding),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: AppColors.iconAndText.withValues(alpha: 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 6),
+            color: AppColors.iconAndText.withValues(alpha: 0.10),
+            blurRadius: 32,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: _currentStep == _LoginStep.phone
-          ? _buildPhoneStep(
-              titleSize: titleSize,
-              labelSize: labelSize,
-              inputFontSize: inputFontSize,
-              inputHeight: inputHeight,
-              btnHeight: btnHeight,
-              btnFontSize: btnFontSize,
-            )
-          : _buildCodeStep(
-              titleSize: titleSize,
-              labelSize: labelSize,
-              inputFontSize: inputFontSize,
-              btnHeight: btnHeight,
-              btnFontSize: btnFontSize,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Логотип
+          Image.asset(
+            'assets/images/logos/main.png',
+            height: logoHeight,
+            errorBuilder: (_, __, ___) => SvgPicture.asset(
+              'assets/images/logos/logo.svg',
+              height: logoHeight,
             ),
+          ),
+          SizedBox(height: logoHeight * 0.3),
+          // Заголовок
+          Text(
+            'Кабинет Менеджера',
+            style: TextStyle(
+              fontSize: titleSize,
+              fontWeight: FontWeight.w800,
+              color: AppColors.iconAndText,
+              letterSpacing: 0.2,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: cardPadding * 0.8),
+          // Форма
+          _currentStep == _LoginStep.phone
+              ? _buildPhoneStep(
+                  titleSize: titleSize,
+                  labelSize: labelSize,
+                  inputFontSize: inputFontSize,
+                  inputHeight: inputHeight,
+                  btnHeight: btnHeight,
+                  btnFontSize: btnFontSize,
+                )
+              : _buildCodeStep(
+                  titleSize: titleSize,
+                  labelSize: labelSize,
+                  inputFontSize: inputFontSize,
+                  btnHeight: btnHeight,
+                  btnFontSize: btnFontSize,
+                ),
+        ],
+      ),
     );
   }
 
@@ -414,24 +337,16 @@ class _ManagerLoginPageState extends State<ManagerLoginPage> {
     required double btnFontSize,
   }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'Вход',
-          style: TextStyle(
-            fontSize: titleSize,
-            fontWeight: FontWeight.w700,
-            color: AppColors.iconAndText,
-          ),
-        ),
-        SizedBox(height: labelSize * 0.4),
         Text(
           'Введите номер — отправим код в WhatsApp',
           style: TextStyle(
             fontSize: labelSize,
             color: AppColors.iconAndText.withValues(alpha: 0.6),
           ),
+          textAlign: TextAlign.center,
         ),
         SizedBox(height: inputHeight * 0.4),
         AutofillGroup(
@@ -469,19 +384,11 @@ class _ManagerLoginPageState extends State<ManagerLoginPage> {
     final codeBoxSize = btnHeight * 1.1;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'Подтверждение',
-          style: TextStyle(
-            fontSize: titleSize,
-            fontWeight: FontWeight.w700,
-            color: AppColors.iconAndText,
-          ),
-        ),
-        SizedBox(height: labelSize * 0.4),
         RichText(
+          textAlign: TextAlign.center,
           text: TextSpan(
             style: TextStyle(
               fontSize: labelSize,

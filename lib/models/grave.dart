@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class Grave {
   final int id;
   final int cemeteryId;
@@ -41,6 +43,45 @@ class Grave {
   bool get isFree => status == 'free';
   bool get isReserved => status == 'reserved';
   bool get isOccupied => status == 'occupied';
+
+  /// Полный номер для поиска: "Участок-Ряд-Место"
+  String get fullNumber => '$sectorNumber-$rowNumber-$graveNumber';
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'cemetery_id': cemeteryId,
+        'cemetery_name': cemeteryName,
+        'sector_number': sectorNumber,
+        'row_number': rowNumber,
+        'grave_number': graveNumber,
+        'status': status,
+        'width': width,
+        'height': height,
+        'polygon_data': jsonEncode({
+          'coordinates': polygonData.coordinates,
+          'color': polygonData.color,
+          'stroke_width': polygonData.strokeWidth,
+          'stroke_color': polygonData.strokeColor,
+        }),
+        'cached_at': DateTime.now().toIso8601String(),
+      };
+
+  factory Grave.fromDbMap(Map<String, dynamic> map) {
+    final polyJson =
+        jsonDecode(map['polygon_data'] as String) as Map<String, dynamic>;
+    return Grave(
+      id: map['id'] as int,
+      cemeteryId: map['cemetery_id'] as int,
+      cemeteryName: map['cemetery_name'] as String? ?? '',
+      sectorNumber: map['sector_number'] as String? ?? '',
+      rowNumber: map['row_number'] as String? ?? '',
+      graveNumber: map['grave_number'] as String? ?? '',
+      status: map['status'] as String? ?? 'free',
+      width: map['width'] as int? ?? 0,
+      height: map['height'] as int? ?? 0,
+      polygonData: PolygonData.fromJson(polyJson),
+    );
+  }
 }
 
 class PolygonData {

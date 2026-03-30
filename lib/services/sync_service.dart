@@ -3,6 +3,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import '../models/burial_record.dart';
 import 'api_service.dart';
+import 'audit_service.dart';
 import 'local_db_service.dart';
 
 class SyncService {
@@ -49,10 +50,11 @@ class SyncService {
     try {
       final pending = await _db.getPendingBurialRecords();
       debugPrint('[Sync] Found ${pending.length} pending records');
-
       for (final record in pending) {
         await _syncBurialRecord(record);
       }
+      // Синхронизируем аудит-логи
+      await AuditService().syncAuditLogs();
     } catch (e) {
       debugPrint('[Sync] Error during sync: $e');
     } finally {
