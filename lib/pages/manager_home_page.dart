@@ -12,6 +12,7 @@ import '../services/sync_service.dart';
 import 'grave_detail_page.dart';
 import 'manager_login_page.dart';
 import 'manager_map_page.dart';
+import 'manager_profile_page.dart';
 import 'place_booking_page.dart';
 
 class ManagerHomePage extends StatefulWidget {
@@ -235,9 +236,14 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
               onPressed: _syncNow,
             ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: AppColors.iconAndText),
             onSelected: (val) {
               if (val == 'logout') _logout();
+              if (val == 'profile') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ManagerProfilePage()),
+                );
+              }
             },
             itemBuilder: (_) => [
               PopupMenuItem(
@@ -253,6 +259,17 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
               ),
               const PopupMenuDivider(),
               const PopupMenuItem(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    Icon(Icons.person_outline, size: 18, color: AppColors.iconAndText),
+                    SizedBox(width: 8),
+                    Text('Профиль'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
                 value: 'logout',
                 child: Row(
                   children: [
@@ -263,6 +280,31 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
                 ),
               ),
             ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.iconAndText, width: 1.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      displayName.isNotEmpty ? displayName : 'Менеджер',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.iconAndText,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.iconAndText),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
