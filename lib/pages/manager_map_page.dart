@@ -15,7 +15,22 @@ import 'grave_detail_page.dart';
 class ManagerMapPage extends StatefulWidget {
   final Cemetery cemetery;
 
-  const ManagerMapPage({super.key, required this.cemetery});
+  /// Без собственного [Scaffold] и кнопки «Назад» — для встраивания рядом со списком.
+  final bool embedded;
+
+  /// Выбранное место снаружи (например сайдбар на [ManagerHomePage]).
+  final Grave? selectedGrave;
+
+  /// Сообщить родителю о выборе / сбросе места (тогда нижний лист на карте не показывается).
+  final ValueChanged<Grave?>? onSelectedGraveChanged;
+
+  const ManagerMapPage({
+    super.key,
+    required this.cemetery,
+    this.embedded = false,
+    this.selectedGrave,
+    this.onSelectedGraveChanged,
+  });
 
   @override
   State<ManagerMapPage> createState() => _ManagerMapPageState();
@@ -60,6 +75,22 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
     _locationService.stopTracking();
     _searchController.dispose();
     super.dispose();
+  }
+
+  bool get _usesExternalSelection => widget.onSelectedGraveChanged != null;
+
+  Grave? get _effectiveSelected =>
+      _usesExternalSelection ? widget.selectedGrave : _selectedGrave;
+
+  @override
+  void didUpdateWidget(ManagerMapPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_usesExternalSelection &&
+        oldWidget.selectedGrave?.id != widget.selectedGrave?.id) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _mapController != null) _updateMapObjects();
+      });
+    }
   }
 
   Future<void> _loadGraves() async {
@@ -143,8 +174,11 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
     if (_mapController == null) return;
     _gravePolygons.clear();
 
+    final selectedId = _effectiveSelected?.id;
+
     for (final grave in _graves) {
       if (grave.polygonData.coordinates.isNotEmpty) {
+        final isSelected = grave.id == selectedId;
         final polygon = PolygonMapObject(
           mapId: MapObjectId('grave_${grave.id}'),
           polygon: Polygon(
@@ -155,8 +189,9 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
             ),
             innerRings: const [],
           ),
-          strokeColor: flutter.Colors.black,
-          strokeWidth: 2.0,
+          strokeColor:
+              isSelected ? flutter.Colors.red : flutter.Colors.black,
+          strokeWidth: isSelected ? 4.0 : 2.0,
           fillColor: _graveColor(grave),
           onTap: (_, __) => _onGraveTap(grave),
         );
@@ -168,8 +203,11 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
   }
 
   void _onGraveTap(Grave grave) {
+    if (_usesExternalSelection) {
+      widget.onSelectedGraveChanged!(grave);
+      return;
+    }
     setState(() {
-      // Сбрасываем рамку предыдущего
       if (_selectedGrave != null &&
           _gravePolygons.containsKey(_selectedGrave!.id)) {
         final prev = _gravePolygons[_selectedGrave!.id]!;
@@ -179,7 +217,6 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
         );
       }
       _selectedGrave = grave;
-      // Выделяем выбранное красной рамкой
       if (_gravePolygons.containsKey(grave.id)) {
         final cur = _gravePolygons[grave.id]!;
         _gravePolygons[grave.id] = cur.copyWith(
@@ -278,7 +315,11 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
       _searchResults = [];
       _searchVisible = false;
     });
-    _onGraveTap(grave);
+    if (_usesExternalSelection) {
+      widget.onSelectedGraveChanged!(grave);
+    } else {
+      _onGraveTap(grave);
+    }
     // Центрируем камеру на могиле
     if (grave.polygonData.coordinates.isNotEmpty) {
       final c = grave.polygonData.coordinates.first;
@@ -319,325 +360,350 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
     }
   }
 
-  @override
-  flutter.Widget build(flutter.BuildContext context) {
-    return flutter.Scaffold(
-      backgroundColor: flutter.Colors.white,
-      body: flutter.Stack(
-        children: [
-          // Карта на весь экран
-          YandexMap(
-            cameraBounds: const CameraBounds(minZoom: 10, maxZoom: 22),
-            onMapCreated: (YandexMapController controller) async {
-              _mapController = controller;
-              final (lat, lon) = _getCemeteryCenter();
-              await _mapController!.moveCamera(
-                CameraUpdate.newCameraPosition(
-                  CameraPosition(
-                    target: Point(latitude: lat, longitude: lon),
-                    zoom: 18.0,
+  flutter.Widget _buildMapStack(flutter.BuildContext context) {
+    return flutter.LayoutBuilder(
+      builder: (context, constraints) {
+        final screenH = MediaQuery.sizeOf(context).height;
+        final panelH =
+            constraints.maxHeight.isFinite && constraints.maxHeight > 0
+            ? constraints.maxHeight
+            : screenH;
+        final fabBottom = _effectiveSelected != null &&
+                !_usesExternalSelection
+            ? panelH * _sheetMaxFraction + 12
+            : 120.0;
+        final sheetMaxH = panelH * _sheetMaxFraction;
+
+        return flutter.Stack(
+          fit: StackFit.expand,
+          children: [
+            // Карта на весь экран
+            YandexMap(
+              cameraBounds: const CameraBounds(minZoom: 10, maxZoom: 22),
+              onMapCreated: (YandexMapController controller) async {
+                _mapController = controller;
+                final (lat, lon) = _getCemeteryCenter();
+                await _mapController!.moveCamera(
+                  CameraUpdate.newCameraPosition(
+                    CameraPosition(
+                      target: Point(latitude: lat, longitude: lon),
+                      zoom: 18.0,
+                    ),
+                  ),
+                );
+                if (!_isLoadingGraves) _updateMapObjects();
+                try {
+                  await _mapController!.toggleUserLayer(
+                    visible: true,
+                    headingEnabled: true,
+                    autoZoomEnabled: false,
+                  );
+                } catch (e) {
+                  debugPrint('User location layer: $e');
+                }
+              },
+              mapObjects: [..._gravePolygons.values],
+            ),
+
+            // Индикатор загрузки
+            if (_isLoadingGraves)
+              const flutter.Center(
+                child: flutter.Card(
+                  child: flutter.Padding(
+                    padding: flutter.EdgeInsets.all(16),
+                    child: flutter.Column(
+                      mainAxisSize: flutter.MainAxisSize.min,
+                      children: [
+                        flutter.CircularProgressIndicator(
+                          color: AppColors.buttonBackground,
+                        ),
+                        flutter.SizedBox(height: 12),
+                        flutter.Text('Загрузка мест...'),
+                      ],
+                    ),
                   ),
                 ),
-              );
-              if (!_isLoadingGraves) _updateMapObjects();
-              try {
-                await _mapController!.toggleUserLayer(
-                  visible: true,
-                  headingEnabled: true,
-                  autoZoomEnabled: false,
-                );
-              } catch (e) {
-                debugPrint('User location layer: $e');
-              }
-            },
-            mapObjects: [..._gravePolygons.values],
-          ),
+              ),
 
-          // Индикатор загрузки
-          if (_isLoadingGraves)
-            const flutter.Center(
-              child: flutter.Card(
-                child: flutter.Padding(
-                  padding: flutter.EdgeInsets.all(16),
-                  child: flutter.Column(
-                    mainAxisSize: flutter.MainAxisSize.min,
-                    children: [
-                      flutter.CircularProgressIndicator(
-                        color: AppColors.buttonBackground,
+            // Верхняя панель — заголовок + поиск
+            flutter.Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: flutter.SafeArea(
+                bottom: false,
+                child: flutter.Column(
+                  mainAxisSize: flutter.MainAxisSize.min,
+                  children: [
+                    // Строка заголовка
+                    flutter.Container(
+                      margin: const flutter.EdgeInsets.fromLTRB(12, 12, 12, 0),
+                      decoration: flutter.BoxDecoration(
+                        color: flutter.Colors.white,
+                        borderRadius: flutter.BorderRadius.circular(12),
+                        boxShadow: [
+                          flutter.BoxShadow(
+                            color: flutter.Colors.black.withValues(alpha: 0.12),
+                            blurRadius: 8,
+                          ),
+                        ],
                       ),
-                      flutter.SizedBox(height: 12),
-                      flutter.Text('Загрузка мест...'),
-                    ],
-                  ),
+                      child: flutter.Row(
+                        children: [
+                          if (!widget.embedded)
+                            flutter.IconButton(
+                              icon: const flutter.Icon(
+                                flutter.Icons.arrow_back,
+                                color: AppColors.iconAndText,
+                              ),
+                              onPressed: () => flutter.Navigator.pop(context),
+                            ),
+                          flutter.Expanded(
+                            child: flutter.Text(
+                              widget.cemetery.name,
+                              style: const flutter.TextStyle(
+                                fontSize: 15,
+                                fontWeight: flutter.FontWeight.w600,
+                                color: AppColors.iconAndText,
+                              ),
+                              overflow: flutter.TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (_isFromCache)
+                            const flutter.Padding(
+                              padding: flutter.EdgeInsets.only(right: 4),
+                              child: flutter.Tooltip(
+                                message: 'Показаны сохранённые данные',
+                                child: flutter.Icon(
+                                  flutter.Icons.offline_bolt,
+                                  color: flutter.Colors.orange,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                          flutter.IconButton(
+                            icon: flutter.Icon(
+                              _searchVisible
+                                  ? flutter.Icons.search_off
+                                  : flutter.Icons.search,
+                              color: AppColors.iconAndText,
+                            ),
+                            tooltip: 'Поиск по номеру',
+                            onPressed: () => setState(() {
+                              _searchVisible = !_searchVisible;
+                              if (!_searchVisible) {
+                                _searchController.clear();
+                                _searchResults = [];
+                              }
+                            }),
+                          ),
+                          flutter.IconButton(
+                            icon: const flutter.Icon(
+                              flutter.Icons.refresh,
+                              color: AppColors.iconAndText,
+                            ),
+                            onPressed: _loadGraves,
+                            tooltip: 'Обновить',
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Строка поиска
+                    if (_searchVisible)
+                      flutter.Container(
+                        margin: const flutter.EdgeInsets.fromLTRB(12, 8, 12, 0),
+                        decoration: flutter.BoxDecoration(
+                          color: flutter.Colors.white,
+                          borderRadius: flutter.BorderRadius.circular(12),
+                          boxShadow: [
+                            flutter.BoxShadow(
+                              color: flutter.Colors.black.withValues(
+                                alpha: 0.10,
+                              ),
+                              blurRadius: 6,
+                            ),
+                          ],
+                        ),
+                        child: flutter.TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          decoration: const flutter.InputDecoration(
+                            hintText: 'Участок / ряд / номер места...',
+                            prefixIcon: flutter.Icon(
+                              flutter.Icons.search,
+                              size: 20,
+                            ),
+                            border: flutter.InputBorder.none,
+                            contentPadding: flutter.EdgeInsets.symmetric(
+                              vertical: 12,
+                            ),
+                          ),
+                          onChanged: _onSearchChanged,
+                        ),
+                      ),
+                    // Результаты поиска
+                    if (_searchResults.isNotEmpty)
+                      flutter.Container(
+                        margin: const flutter.EdgeInsets.fromLTRB(12, 4, 12, 0),
+                        constraints: const flutter.BoxConstraints(
+                          maxHeight: 240,
+                        ),
+                        decoration: flutter.BoxDecoration(
+                          color: flutter.Colors.white,
+                          borderRadius: flutter.BorderRadius.circular(12),
+                          boxShadow: [
+                            flutter.BoxShadow(
+                              color: flutter.Colors.black.withValues(
+                                alpha: 0.10,
+                              ),
+                              blurRadius: 6,
+                            ),
+                          ],
+                        ),
+                        child: flutter.ListView.separated(
+                          shrinkWrap: true,
+                          padding: flutter.EdgeInsets.zero,
+                          itemCount: _searchResults.length,
+                          separatorBuilder: (_, __) =>
+                              const flutter.Divider(height: 1),
+                          itemBuilder: (_, i) {
+                            final g = _searchResults[i];
+                            return flutter.ListTile(
+                              dense: true,
+                              leading: flutter.Container(
+                                width: 10,
+                                height: 10,
+                                decoration: flutter.BoxDecoration(
+                                  color: _graveColor(g),
+                                  shape: flutter.BoxShape.circle,
+                                ),
+                              ),
+                              title: flutter.Text(
+                                'Участок ${g.sectorNumber} · Ряд ${g.rowNumber} · Место ${g.graveNumber}',
+                                style: const flutter.TextStyle(fontSize: 13),
+                              ),
+                              subtitle: flutter.Text(
+                                _statusLabel(g.status),
+                                style: flutter.TextStyle(
+                                  fontSize: 11,
+                                  color: _statusColor(g.status),
+                                ),
+                              ),
+                              onTap: () => _selectFromSearch(g),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
 
-          // Верхняя панель — заголовок + поиск
-          flutter.Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: flutter.SafeArea(
-              bottom: false,
-              child: flutter.Column(
-                mainAxisSize: flutter.MainAxisSize.min,
-                children: [
-                  // Строка заголовка
-                  flutter.Container(
-                    margin: const flutter.EdgeInsets.fromLTRB(12, 12, 12, 0),
+            // Счётчики по статусам + кнопка легенды — справа сверху в области карты
+            flutter.Positioned(
+              top: 80,
+              right: 12,
+              child: flutter.SafeArea(
+                bottom: false,
+                child: flutter.Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    flutter.AnimatedOpacity(
+                      opacity: _showLegend ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: CemeteryPlotStatsLegend(
+                        freeCount: widget.cemetery.freeSpaces,
+                        reservedCount: widget.cemetery.reservedSpaces,
+                        occupiedCount: widget.cemetery.occupiedSpaces,
+                      ),
+                    ),
+                    const flutter.SizedBox(height: 8),
+                    _MapButton(
+                      icon: _showLegend
+                          ? flutter.Icons.layers_clear
+                          : flutter.Icons.layers,
+                      tooltip: _showLegend
+                          ? 'Скрыть счётчики'
+                          : 'Показать счётчики',
+                      onTap: () => setState(() => _showLegend = !_showLegend),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Кнопка моего местоположения
+            flutter.Positioned(
+              bottom: fabBottom,
+              right: 12,
+              child: _isLocating
+                  ? const flutter.Card(
+                      child: flutter.Padding(
+                        padding: flutter.EdgeInsets.all(12),
+                        child: flutter.SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: flutter.CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.buttonBackground,
+                          ),
+                        ),
+                      ),
+                    )
+                  : _MapButton(
+                      icon: flutter.Icons.my_location,
+                      tooltip: 'Моё местоположение',
+                      onTap: _centerOnMyLocation,
+                    ),
+            ),
+
+            // Нижняя панель — только без внешнего сайдбара (полноэкранная карта)
+            if (_effectiveSelected != null && !_usesExternalSelection)
+              flutter.Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: flutter.SafeArea(
+                  top: false,
+                  child: flutter.Container(
+                    constraints: flutter.BoxConstraints(maxHeight: sheetMaxH),
                     decoration: flutter.BoxDecoration(
                       color: flutter.Colors.white,
-                      borderRadius: flutter.BorderRadius.circular(12),
+                      borderRadius: const flutter.BorderRadius.only(
+                        topLeft: flutter.Radius.circular(16),
+                        topRight: flutter.Radius.circular(16),
+                      ),
                       boxShadow: [
                         flutter.BoxShadow(
                           color: flutter.Colors.black.withValues(alpha: 0.12),
-                          blurRadius: 8,
+                          blurRadius: 12,
+                          offset: const flutter.Offset(0, -2),
                         ),
                       ],
                     ),
-                    child: flutter.Row(
-                      children: [
-                        flutter.IconButton(
-                          icon: const flutter.Icon(
-                            flutter.Icons.arrow_back,
-                            color: AppColors.iconAndText,
-                          ),
-                          onPressed: () => flutter.Navigator.pop(context),
-                        ),
-                        flutter.Expanded(
-                          child: flutter.Text(
-                            widget.cemetery.name,
-                            style: const flutter.TextStyle(
-                              fontSize: 15,
-                              fontWeight: flutter.FontWeight.w600,
-                              color: AppColors.iconAndText,
-                            ),
-                            overflow: flutter.TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (_isFromCache)
-                          const flutter.Padding(
-                            padding: flutter.EdgeInsets.only(right: 4),
-                            child: flutter.Tooltip(
-                              message: 'Показаны сохранённые данные',
-                              child: flutter.Icon(
-                                flutter.Icons.offline_bolt,
-                                color: flutter.Colors.orange,
-                                size: 18,
-                              ),
-                            ),
-                          ),
-                        flutter.IconButton(
-                          icon: flutter.Icon(
-                            _searchVisible
-                                ? flutter.Icons.search_off
-                                : flutter.Icons.search,
-                            color: AppColors.iconAndText,
-                          ),
-                          tooltip: 'Поиск по номеру',
-                          onPressed: () => setState(() {
-                            _searchVisible = !_searchVisible;
-                            if (!_searchVisible) {
-                              _searchController.clear();
-                              _searchResults = [];
-                            }
-                          }),
-                        ),
-                        flutter.IconButton(
-                          icon: const flutter.Icon(
-                            flutter.Icons.refresh,
-                            color: AppColors.iconAndText,
-                          ),
-                          onPressed: _loadGraves,
-                          tooltip: 'Обновить',
-                        ),
-                      ],
+                    child: flutter.SingleChildScrollView(
+                      padding: const flutter.EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      child: _buildSelectedGravePanel(_effectiveSelected!),
                     ),
-                  ),
-                  // Строка поиска
-                  if (_searchVisible)
-                    flutter.Container(
-                      margin: const flutter.EdgeInsets.fromLTRB(12, 8, 12, 0),
-                      decoration: flutter.BoxDecoration(
-                        color: flutter.Colors.white,
-                        borderRadius: flutter.BorderRadius.circular(12),
-                        boxShadow: [
-                          flutter.BoxShadow(
-                            color: flutter.Colors.black.withValues(alpha: 0.10),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-                      child: flutter.TextField(
-                        controller: _searchController,
-                        autofocus: true,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        decoration: const flutter.InputDecoration(
-                          hintText: 'Участок / ряд / номер места...',
-                          prefixIcon: flutter.Icon(
-                            flutter.Icons.search,
-                            size: 20,
-                          ),
-                          border: flutter.InputBorder.none,
-                          contentPadding: flutter.EdgeInsets.symmetric(
-                            vertical: 12,
-                          ),
-                        ),
-                        onChanged: _onSearchChanged,
-                      ),
-                    ),
-                  // Результаты поиска
-                  if (_searchResults.isNotEmpty)
-                    flutter.Container(
-                      margin: const flutter.EdgeInsets.fromLTRB(12, 4, 12, 0),
-                      constraints: const flutter.BoxConstraints(maxHeight: 240),
-                      decoration: flutter.BoxDecoration(
-                        color: flutter.Colors.white,
-                        borderRadius: flutter.BorderRadius.circular(12),
-                        boxShadow: [
-                          flutter.BoxShadow(
-                            color: flutter.Colors.black.withValues(alpha: 0.10),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-                      child: flutter.ListView.separated(
-                        shrinkWrap: true,
-                        padding: flutter.EdgeInsets.zero,
-                        itemCount: _searchResults.length,
-                        separatorBuilder: (_, __) =>
-                            const flutter.Divider(height: 1),
-                        itemBuilder: (_, i) {
-                          final g = _searchResults[i];
-                          return flutter.ListTile(
-                            dense: true,
-                            leading: flutter.Container(
-                              width: 10,
-                              height: 10,
-                              decoration: flutter.BoxDecoration(
-                                color: _graveColor(g),
-                                shape: flutter.BoxShape.circle,
-                              ),
-                            ),
-                            title: flutter.Text(
-                              'Участок ${g.sectorNumber} · Ряд ${g.rowNumber} · Место ${g.graveNumber}',
-                              style: const flutter.TextStyle(fontSize: 13),
-                            ),
-                            subtitle: flutter.Text(
-                              _statusLabel(g.status),
-                              style: flutter.TextStyle(
-                                fontSize: 11,
-                                color: _statusColor(g.status),
-                              ),
-                            ),
-                            onTap: () => _selectFromSearch(g),
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-
-          // Легенда
-          flutter.Positioned(
-            top: 80,
-            left: 12,
-            child: flutter.SafeArea(
-              child: flutter.AnimatedOpacity(
-                opacity: _showLegend ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 200),
-                child: const GraveStatusLegend(),
-              ),
-            ),
-          ),
-
-          // Кнопка скрыть/показать легенду
-          flutter.Positioned(
-            top: 80,
-            right: 12,
-            child: flutter.SafeArea(
-              child: flutter.Column(
-                children: [
-                  _MapButton(
-                    icon: _showLegend
-                        ? flutter.Icons.layers_clear
-                        : flutter.Icons.layers,
-                    tooltip: _showLegend ? 'Скрыть легенду' : 'Легенда',
-                    onTap: () => setState(() => _showLegend = !_showLegend),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Кнопка моего местоположения
-          flutter.Positioned(
-            bottom: _selectedGrave != null
-                ? MediaQuery.of(context).size.height * _sheetMaxFraction + 12
-                : 120,
-            right: 12,
-            child: _isLocating
-                ? const flutter.Card(
-                    child: flutter.Padding(
-                      padding: flutter.EdgeInsets.all(12),
-                      child: flutter.SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: flutter.CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.buttonBackground,
-                        ),
-                      ),
-                    ),
-                  )
-                : _MapButton(
-                    icon: flutter.Icons.my_location,
-                    tooltip: 'Моё местоположение',
-                    onTap: _centerOnMyLocation,
-                  ),
-          ),
-
-          // Нижняя панель выбранного места
-          if (_selectedGrave != null)
-            flutter.Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: flutter.SafeArea(
-                top: false,
-                child: flutter.Container(
-                  constraints: flutter.BoxConstraints(
-                    maxHeight:
-                        MediaQuery.of(context).size.height * _sheetMaxFraction,
-                  ),
-                  decoration: flutter.BoxDecoration(
-                    color: flutter.Colors.white,
-                    borderRadius: const flutter.BorderRadius.only(
-                      topLeft: flutter.Radius.circular(16),
-                      topRight: flutter.Radius.circular(16),
-                    ),
-                    boxShadow: [
-                      flutter.BoxShadow(
-                        color: flutter.Colors.black.withValues(alpha: 0.12),
-                        blurRadius: 12,
-                        offset: const flutter.Offset(0, -2),
-                      ),
-                    ],
-                  ),
-                  child: flutter.SingleChildScrollView(
-                    padding: const flutter.EdgeInsets.fromLTRB(16, 4, 16, 24),
-                    child: _buildSelectedGravePanel(_selectedGrave!),
                   ),
                 ),
               ),
-            ),
-        ],
-      ),
+          ],
+        );
+      },
     );
+  }
+
+  @override
+  flutter.Widget build(flutter.BuildContext context) {
+    final stack = _buildMapStack(context);
+    if (widget.embedded) {
+      return flutter.ColoredBox(color: flutter.Colors.white, child: stack);
+    }
+    return flutter.Scaffold(backgroundColor: flutter.Colors.white, body: stack);
   }
 
   flutter.Widget _buildSelectedGravePanel(Grave grave) {
@@ -674,9 +740,10 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
               icon: const flutter.Icon(flutter.Icons.close, size: 20),
               onPressed: () {
                 setState(() {
-                  if (_gravePolygons.containsKey(_selectedGrave!.id)) {
-                    final p = _gravePolygons[_selectedGrave!.id]!;
-                    _gravePolygons[_selectedGrave!.id] = p.copyWith(
+                  final sel = _selectedGrave;
+                  if (sel != null && _gravePolygons.containsKey(sel.id)) {
+                    final p = _gravePolygons[sel.id]!;
+                    _gravePolygons[sel.id] = p.copyWith(
                       strokeColor: flutter.Colors.black,
                       strokeWidth: 2.0,
                     );
