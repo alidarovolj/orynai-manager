@@ -1,3 +1,4 @@
+import 'dart:io' show File;
 import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
@@ -111,6 +112,41 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
       imageQuality: 85,
     );
     if (file != null) setState(() => _photo = file);
+  }
+
+  String _plotAreaLabel() {
+    final w = widget.grave.width;
+    final h = widget.grave.height;
+    if (w <= 0 || h <= 0) return '';
+    final fmt = NumberFormat.decimalPattern('ru');
+    // ≥10 — дециметры (25 → 2,5 м), иначе целые метры из API
+    final wm = (w >= 10 || h >= 10) ? w / 10.0 : w.toDouble();
+    final hm = (w >= 10 || h >= 10) ? h / 10.0 : h.toDouble();
+    return '${fmt.format(wm)}х${fmt.format(hm)}м';
+  }
+
+  Future<void> _onSavePressed() async {
+    if (!_formKey.currentState!.validate()) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return _BookingConfirmDialog(
+          cemeteryName: widget.cemetery.name,
+          sector: widget.grave.sectorNumber,
+          place: widget.grave.graveNumber,
+          areaLabel: _plotAreaLabel(),
+          fullName: _nameController.text.trim(),
+          iin: _iinController.text.trim().replaceAll(RegExp(r'\s'), ''),
+          birth: _birthController.text.trim(),
+          death: _deathController.text.trim(),
+          photo: _photo,
+        );
+      },
+    );
+    if (confirmed == true && mounted) {
+      await _submit();
+    }
   }
 
   Future<void> _submit() async {
@@ -469,7 +505,7 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
                           SizedBox(
                             height: 52,
                             child: FilledButton(
-                              onPressed: _saving ? null : _submit,
+                              onPressed: _saving ? null : _onSavePressed,
                               style: FilledButton.styleFrom(
                                 backgroundColor: AppColors.buttonBackground,
                                 foregroundColor: Colors.white,
@@ -504,6 +540,343 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Модалка подтверждения перед отправкой заявки на бронирование.
+class _BookingConfirmDialog extends StatelessWidget {
+  final String cemeteryName;
+  final String sector;
+  final String place;
+  final String areaLabel;
+  final String fullName;
+  final String iin;
+  final String birth;
+  final String death;
+  final XFile? photo;
+
+  const _BookingConfirmDialog({
+    required this.cemeteryName,
+    required this.sector,
+    required this.place,
+    required this.areaLabel,
+    required this.fullName,
+    required this.iin,
+    required this.birth,
+    required this.death,
+    required this.photo,
+  });
+
+  static const double _galleryH = 200;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = photo?.path;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    SizedBox(
+                      height: _galleryH,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: _ConfirmPhotoTile(path: path),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: _ConfirmPhotoTile(path: path),
+                                ),
+                                const SizedBox(height: 8),
+                                Expanded(
+                                  child: _ConfirmPhotoTile(path: path),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Material(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: IconButton(
+                          icon: const Icon(Icons.close, size: 22),
+                          color: AppColors.iconAndText,
+                          onPressed: () => Navigator.of(context).pop(false),
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.all(8),
+                          constraints: const BoxConstraints(
+                            minWidth: 40,
+                            minHeight: 40,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cemeteryName,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.iconAndText,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _InfoChip(label: 'Сектор: $sector'),
+                        _InfoChip(label: 'Место: $place'),
+                        if (areaLabel.isNotEmpty)
+                          _InfoChip(label: 'Площадь: $areaLabel'),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _ConfirmDataRow(
+                      label: 'ФИО покойного:',
+                      value: fullName.isEmpty ? '—' : fullName,
+                      valueBold: true,
+                      valueColor: AppColors.iconAndText,
+                    ),
+                    _ConfirmDataRow(
+                      label: 'ИИН:',
+                      value: iin.isEmpty ? '—' : iin,
+                      muted: true,
+                    ),
+                    _ConfirmDataRow(
+                      label: 'Дата рождения:',
+                      value: birth.isEmpty ? '—' : birth,
+                      muted: true,
+                    ),
+                    _ConfirmDataRow(
+                      label: 'Дата смерти:',
+                      value: death.isEmpty ? '—' : death,
+                      muted: true,
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: FilledButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFE8E4DC),
+                            foregroundColor: AppColors.iconAndText,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Редактировать',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: FilledButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.buttonBackground,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Подтвердить',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final String label;
+
+  const _InfoChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFEFEF),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: AppColors.iconAndText,
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfirmDataRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool valueBold;
+  final bool muted;
+  final Color? valueColor;
+
+  const _ConfirmDataRow({
+    required this.label,
+    required this.value,
+    this.valueBold = false,
+    this.muted = false,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final labelColor =
+        muted ? Colors.grey.shade600 : AppColors.iconAndText.withValues(alpha: 0.75);
+    final defaultValueColor =
+        muted ? Colors.grey.shade600 : AppColors.iconAndText;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Divider(height: 1, thickness: 1, color: Colors.grey.shade300),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 12,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: labelColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 13,
+                child: Text(
+                  value,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: valueBold ? FontWeight.w700 : FontWeight.w500,
+                    color: valueColor ?? defaultValueColor,
+                    height: 1.25,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ConfirmPhotoTile extends StatelessWidget {
+  final String? path;
+
+  const _ConfirmPhotoTile({this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget child;
+    if (path != null && path!.isNotEmpty) {
+      child = Image.file(
+        File(path!),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => _placeholder(),
+      );
+    } else {
+      child = _placeholder();
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: ColoredBox(
+        color: Colors.grey.shade300,
+        child: child,
+      ),
+    );
+  }
+
+  Widget _placeholder() {
+    return Center(
+      child: Icon(
+        Icons.image_outlined,
+        size: 36,
+        color: Colors.grey.shade500,
       ),
     );
   }
