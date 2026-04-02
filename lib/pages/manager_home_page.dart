@@ -312,35 +312,35 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Заголовок
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSizes.paddingMedium,
-              AppSizes.paddingMedium,
-              AppSizes.paddingMedium,
-              8,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Кладбища',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.iconAndText,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Выберите кладбище для работы',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.iconAndText.withValues(alpha: 0.7),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // Padding(
+          //   padding: const EdgeInsets.fromLTRB(
+          //     AppSizes.paddingMedium,
+          //     AppSizes.paddingMedium,
+          //     AppSizes.paddingMedium,
+          //     8,
+          //   ),
+          //   child: Column(
+          //     crossAxisAlignment: CrossAxisAlignment.start,
+          //     children: [
+          //       const Text(
+          //         'Кладбища',
+          //         style: TextStyle(
+          //           fontSize: 24,
+          //           fontWeight: FontWeight.w700,
+          //           color: AppColors.iconAndText,
+          //         ),
+          //       ),
+          //       const SizedBox(height: 4),
+          //       Text(
+          //         'Выберите кладбище для работы',
+          //         style: TextStyle(
+          //           fontSize: 14,
+          //           color: AppColors.iconAndText.withValues(alpha: 0.7),
+          //         ),
+          //       ),
+          //     ],
+          //   ),
+          // ),
 
           // Строка статуса (кэш / обновление / ошибка)
           _buildStatusBar(),
@@ -413,25 +413,25 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
       );
     }
 
-    if (_cachedAt != null) {
-      final diff = DateTime.now().difference(_cachedAt!);
-      final label = diff.inMinutes < 1
-          ? 'только что'
-          : diff.inHours < 1
-          ? '${diff.inMinutes} мин. назад'
-          : diff.inDays < 1
-          ? '${diff.inHours} ч. назад'
-          : '${diff.inDays} д. назад';
-      return Container(
-        width: double.infinity,
-        color: Colors.green.withValues(alpha: 0.06),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Text(
-          'Данные обновлены $label',
-          style: TextStyle(fontSize: 11, color: Colors.green.shade700),
-        ),
-      );
-    }
+    // if (_cachedAt != null) {
+    //   final diff = DateTime.now().difference(_cachedAt!);
+    //   final label = diff.inMinutes < 1
+    //       ? 'только что'
+    //       : diff.inHours < 1
+    //       ? '${diff.inMinutes} мин. назад'
+    //       : diff.inDays < 1
+    //       ? '${diff.inHours} ч. назад'
+    //       : '${diff.inDays} д. назад';
+    //   return Container(
+    //     width: double.infinity,
+    //     color: Colors.green.withValues(alpha: 0.06),
+    //     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    //     child: Text(
+    //       'Данные обновлены $label',
+    //       style: TextStyle(fontSize: 11, color: Colors.green.shade700),
+    //     ),
+    //   );
+    // }
 
     return const SizedBox.shrink();
   }
@@ -539,30 +539,61 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
           right: BorderSide(color: Colors.grey.shade300),
         ),
       ),
-      child: RefreshIndicator(
-        onRefresh: _refreshCemeteries,
-        color: AppColors.buttonBackground,
-        child: ListView.separated(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(AppSizes.paddingMedium),
-          itemCount: _cemeteries.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final cemetery = _cemeteries[index];
-            final selected = cemetery.id == _selectedCemetery?.id;
-            return _CemeteryCard(
-              cemetery: cemetery,
-              iconPath: _getReligionIconPath(cemetery),
-              selected: selected,
-              onTap: () {
-                setState(() {
-                  _selectedCemetery = cemetery;
-                  _selectedGrave = null;
-                });
-              },
-            );
-          },
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSizes.paddingMedium,
+              AppSizes.paddingMedium,
+              AppSizes.paddingMedium,
+              8,
+            ),
+            child: Text(
+              'ЗАБРОНИРОВАТЬ МЕСТО',
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                fontSize: 20,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF201001),
+                letterSpacing: 0.5,
+                height: 1.2,
+              ),
+            ),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _refreshCemeteries,
+              color: AppColors.buttonBackground,
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSizes.paddingMedium,
+                  0,
+                  AppSizes.paddingMedium,
+                  AppSizes.paddingMedium,
+                ),
+                itemCount: _cemeteries.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final cemetery = _cemeteries[index];
+                  final selected = cemetery.id == _selectedCemetery?.id;
+                  return _CemeteryCard(
+                    cemetery: cemetery,
+                    iconPath: _getReligionIconPath(cemetery),
+                    selected: selected,
+                    onTap: () {
+                      setState(() {
+                        _selectedCemetery = cemetery;
+                        _selectedGrave = null;
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

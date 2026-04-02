@@ -38,6 +38,10 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
 
   static const int _bookingDays = 3;
 
+  static const Color _bookingSummaryLabelColor = Color(0xFF201001);
+  static const Color _bookingSummaryValueColor = Color(0xFF8A8580);
+  static const Color _bookingSummaryDividerColor = Color(0xFFE5E0D8);
+
   @override
   void initState() {
     super.initState();
@@ -273,22 +277,39 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
                         ),
                         const SizedBox(height: 16),
                         Container(
-                          padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF4F0E7),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Text(
-                                    'Срок брони: $_bookingDays дня',
-                                    style: const TextStyle(
+                                    'Срок брони:',
+                                    style: TextStyle(
+                                      fontFamily: 'Manrope',
                                       fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.iconAndText,
+                                      fontWeight: FontWeight.w500,
+                                      color: _bookingSummaryLabelColor,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '$_bookingDays дня',
+                                    style: TextStyle(
+                                      fontFamily: 'Manrope',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w400,
+                                      color: _bookingSummaryValueColor,
+                                      height: 1.3,
                                     ),
                                   ),
                                   const SizedBox(width: 6),
@@ -297,37 +318,127 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
                                         'После подачи заявки у вас есть $_bookingDays дня для оплаты и подтверждения.',
                                     child: Icon(
                                       Icons.info_outline,
-                                      size: 16,
-                                      color: AppColors.iconAndText
-                                          .withValues(alpha: 0.6),
+                                      size: 17,
+                                      color: _bookingSummaryLabelColor
+                                          .withValues(alpha: 0.45),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Сектор: ${widget.grave.sectorNumber}   Место: ${widget.grave.graveNumber}',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.iconAndText,
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Сектор: ',
+                                    style: TextStyle(
+                                      fontFamily: 'Manrope',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: _bookingSummaryLabelColor,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                  Text(
+                                    widget.grave.sectorNumber,
+                                    style: TextStyle(
+                                      fontFamily: 'Manrope',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w400,
+                                      color: _bookingSummaryValueColor,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  Text(
+                                    'Место: ',
+                                    style: TextStyle(
+                                      fontFamily: 'Manrope',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: _bookingSummaryLabelColor,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                  Text(
+                                    widget.grave.graveNumber,
+                                    style: TextStyle(
+                                      fontFamily: 'Manrope',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w400,
+                                      color: _bookingSummaryValueColor,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                child: Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: _bookingSummaryDividerColor,
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'ФИО покойного: ${_preview(_nameController.text)}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.iconAndText
-                                      .withValues(alpha: 0.85),
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'ФИО покойного: ',
+                                      style: TextStyle(
+                                        fontFamily: 'Manrope',
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: _bookingSummaryLabelColor,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: _preview(_nameController.text),
+                                      style: TextStyle(
+                                        fontFamily: 'Manrope',
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w400,
+                                        color: _bookingSummaryValueColor,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Дата похорон: ${_preview(_deathController.text)}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.iconAndText
-                                      .withValues(alpha: 0.85),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                child: Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: _bookingSummaryDividerColor,
+                                ),
+                              ),
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Дата похорон: ',
+                                      style: TextStyle(
+                                        fontFamily: 'Manrope',
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: _bookingSummaryLabelColor,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: _preview(_deathController.text),
+                                      style: TextStyle(
+                                        fontFamily: 'Manrope',
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w400,
+                                        color: _bookingSummaryValueColor,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -372,7 +483,7 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
                             decoration: InputDecoration(
                               hintText: 'ФИО',
                               filled: true,
-                              fillColor: const Color(0xFFF4F0E7),
+                              fillColor: Colors.white,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -392,7 +503,7 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
                             decoration: InputDecoration(
                               hintText: 'ИИН (12 цифр)',
                               filled: true,
-                              fillColor: const Color(0xFFF4F0E7),
+                              fillColor: Colors.white,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -427,7 +538,7 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
                                   decoration: InputDecoration(
                                     hintText: 'Дата рождения',
                                     filled: true,
-                                    fillColor: const Color(0xFFF4F0E7),
+                                    fillColor: Colors.white,
                                     suffixIcon: const Icon(Icons.calendar_today,
                                         size: 18),
                                     border: OutlineInputBorder(
@@ -446,7 +557,7 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
                                   decoration: InputDecoration(
                                     hintText: 'Дата смерти',
                                     filled: true,
-                                    fillColor: const Color(0xFFF4F0E7),
+                                    fillColor: Colors.white,
                                     suffixIcon: const Icon(Icons.calendar_today,
                                         size: 18),
                                     border: OutlineInputBorder(
