@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../constants.dart';
+import '../widgets/orynai_app_bar.dart';
 import '../models/burial_record.dart';
 import '../models/cemetery.dart';
 import '../models/grave.dart';
@@ -268,23 +269,11 @@ class _GraveDetailPageState extends State<GraveDetailPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.iconAndText),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Место ${widget.grave.sectorNumber}-'
-          '${widget.grave.rowNumber}-'
-          '${widget.grave.graveNumber}',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: AppColors.iconAndText,
-          ),
-        ),
+      appBar: OrynaiAppBar(
+        title: 'Место ${widget.grave.sectorNumber}-'
+            '${widget.grave.rowNumber}-'
+            '${widget.grave.graveNumber}',
+        showBack: true,
         actions: [
           if (_existingRecord != null)
             Padding(
@@ -294,8 +283,7 @@ class _GraveDetailPageState extends State<GraveDetailPage> {
                   _existingRecord!.syncStatusLabel,
                   style: const TextStyle(fontSize: 11, color: Colors.white),
                 ),
-                backgroundColor:
-                    _syncStatusColor(_existingRecord!.syncStatus),
+                backgroundColor: _syncStatusColor(_existingRecord!.syncStatus),
                 padding: EdgeInsets.zero,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
@@ -334,7 +322,7 @@ class _GraveDetailPageState extends State<GraveDetailPage> {
                         ),
                         const Spacer(),
                         Text(
-                          '${widget.cemetery.name}',
+                          widget.cemetery.name,
                           style: const TextStyle(
                             fontSize: 12,
                             color: AppColors.iconAndText,
@@ -680,8 +668,8 @@ class _FormField extends StatelessWidget {
               ),
             ),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 12,
+              horizontal: 16,
+              vertical: 16,
             ),
           ),
         ),
@@ -740,8 +728,8 @@ class _DateFormField extends StatelessWidget {
               ),
             ),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 12,
+              horizontal: 16,
+              vertical: 16,
             ),
           ),
         ),

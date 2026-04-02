@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants.dart';
 import '../services/auth_state_manager.dart';
 import '../services/api_service.dart';
+import '../widgets/orynai_app_bar.dart';
 
 enum _ProfileSection { personalData, burialRequests, appeals }
 
@@ -24,7 +27,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   bool _loadingRequests = false;
   String? _requestsError;
   Map<String, dynamic>? _selectedRequest;
-  _ContentView _requestsView = _ContentView.list;
+  // _requestsView removed — create navigates to home
 
   // Appeals state
   List<Map<String, dynamic>> _appeals = [];
@@ -32,14 +35,47 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   String? _appealsError;
   _ContentView _appealsView = _ContentView.list;
 
-  // Cemeteries for forms
-  List<Map<String, dynamic>> _cemeteries = [];
+
+  static const _prefKeyRequests = 'profile_burial_requests_cache';
+  static const _prefKeyAppeals = 'profile_appeals_cache';
 
   @override
   void initState() {
     super.initState();
+    _restoreCacheAndFetch();
+  }
+
+  // ─── Cache helpers ─────────────────────────────────────────────────────────
+
+  Future<void> _restoreCacheAndFetch() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rawReq = prefs.getString(_prefKeyRequests);
+    final rawApp = prefs.getString(_prefKeyAppeals);
+
+    // Показываем кэш мгновенно, если есть
+    if (mounted && rawReq != null) {
+      try {
+        final cached = (json.decode(rawReq) as List).cast<Map<String, dynamic>>();
+        setState(() => _requests = cached);
+      } catch (_) {}
+    }
+    if (mounted && rawApp != null) {
+      try {
+        final cached = (json.decode(rawApp) as List).cast<Map<String, dynamic>>();
+        setState(() => _appeals = cached);
+      } catch (_) {}
+    }
+
+    // Затем обновляем в фоне
     _loadBurialRequests();
     _loadAppeals();
+  }
+
+  Future<void> _saveToCache(String key, List<Map<String, dynamic>> list) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, json.encode(list));
+    } catch (_) {}
   }
 
   // ─── API Loaders ───────────────────────────────────────────────────────────
@@ -51,9 +87,18 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       final phone = _auth.currentUser?.phone ?? '';
       final resp = await _api.getBurialRequests(userPhone: phone);
       final list = _extractList(resp);
-      if (mounted) setState(() { _requests = list; _loadingRequests = false; });
+      if (mounted) {
+        setState(() { _requests = list; _loadingRequests = false; });
+        _saveToCache(_prefKeyRequests, list);
+      }
     } catch (e) {
-      if (mounted) setState(() { _loadingRequests = false; _requestsError = 'Не удалось загрузить заявки. Проверьте подключение.'; });
+      if (mounted) {
+        setState(() {
+          _loadingRequests = false;
+          // Не затираем ошибкой если есть кэш
+          if (_requests.isEmpty) _requestsError = 'Не удалось загрузить заявки. Проверьте подключение.';
+        });
+      }
     }
   }
 
@@ -63,20 +108,20 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
     try {
       final resp = await _api.get('/api/v3/rip-government/v1/appeal/my', requiresAuth: true);
       final list = _extractList(resp);
-      if (mounted) setState(() { _appeals = list; _loadingAppeals = false; });
+      if (mounted) {
+        setState(() { _appeals = list; _loadingAppeals = false; });
+        _saveToCache(_prefKeyAppeals, list);
+      }
     } catch (e) {
-      if (mounted) setState(() { _loadingAppeals = false; _appealsError = 'Не удалось загрузить обращения.'; });
+      if (mounted) {
+        setState(() {
+          _loadingAppeals = false;
+          if (_appeals.isEmpty) _appealsError = 'Не удалось загрузить обращения.';
+        });
+      }
     }
   }
 
-  Future<void> _loadCemeteries() async {
-    if (_cemeteries.isNotEmpty) return;
-    try {
-      final resp = await _api.get('/api/v1/cemeteries');
-      final list = _extractList(resp);
-      if (mounted) setState(() => _cemeteries = list);
-    } catch (_) {}
-  }
 
   List<Map<String, dynamic>> _extractList(dynamic resp) {
     if (resp == null) return [];
@@ -100,7 +145,6 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
     setState(() {
       _section = s;
       _selectedRequest = null;
-      _requestsView = _ContentView.list;
       _appealsView = _ContentView.list;
     });
   }
@@ -112,34 +156,35 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
     final displayName = _auth.getDisplayName();
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.iconAndText),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
-          children: [
-            Image.asset('assets/images/logos/main.png', height: 30,
-                errorBuilder: (_, __, ___) => const SizedBox(width: 30)),
-            const SizedBox(width: 8),
-            const Text('Кабинет Менеджера',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.iconAndText)),
-          ],
-        ),
+      appBar: OrynaiAppBar(
+        title: 'Кабинет менеджера',
+        showLogo: true,
+        showBack: true,
         actions: [
           if (displayName.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.only(right: 16, left: 4),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.iconAndText, width: 1.5),
+                  border: Border.all(color: const Color(0xFFDDDDDD), width: 1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(displayName,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.iconAndText)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.person_outline, size: 16, color: AppColors.iconAndText),
+                    const SizedBox(width: 6),
+                    Text(
+                      displayName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.iconAndText,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
         ],
@@ -283,9 +328,11 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         api: _api,
         userPhone: _auth.currentUser?.phone ?? '',
         onBack: () => setState(() => _appealsView = _ContentView.list),
-        onSuccess: () {
-          setState(() => _appealsView = _ContentView.list);
-          _appeals.clear();
+        onSuccess: () async {
+          setState(() { _appealsView = _ContentView.list; _appeals.clear(); });
+          // Инвалидируем кэш перед обновлением
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove(_prefKeyAppeals);
           _loadAppeals();
         },
       );
@@ -303,6 +350,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         _sectionHeader(
           title: 'Обращения в администрацию',
           isLoading: _loadingAppeals,
+          hasCachedData: _appeals.isNotEmpty,
           onRefresh: _loadAppeals,
           onAdd: () => setState(() => _appealsView = _ContentView.create),
           addLabel: 'Создать обращение',
@@ -327,21 +375,6 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   // ─── Заявки на захоронение ─────────────────────────────────────────────────
 
   Widget _buildBurialSection() {
-    if (_requestsView == _ContentView.create) {
-      return _BurialRequestCreateForm(
-        api: _api,
-        cemeteries: _cemeteries,
-        userPhone: _auth.currentUser?.phone ?? '',
-        onLoadCemeteries: _loadCemeteries,
-        onBack: () => setState(() => _requestsView = _ContentView.list),
-        onSuccess: () {
-          setState(() { _requestsView = _ContentView.list; _selectedRequest = null; });
-          _requests.clear();
-          _loadBurialRequests();
-        },
-      );
-    }
-
     if (_loadingRequests && _requests.isEmpty) {
       return const Center(child: CircularProgressIndicator(color: AppColors.buttonBackground));
     }
@@ -372,10 +405,11 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         _sectionHeader(
           title: 'Заявки на захоронение',
           isLoading: _loadingRequests,
+          hasCachedData: _requests.isNotEmpty,
           onRefresh: _loadBurialRequests,
           onAdd: () {
-            _loadCemeteries();
-            setState(() { _requestsView = _ContentView.create; _selectedRequest = null; });
+            // Переходим на главный экран для выбора места на карте
+            Navigator.of(context).popUntil((route) => route.isFirst);
           },
           addLabel: 'Создать заявку',
         ),
@@ -405,39 +439,58 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   Widget _sectionHeader({
     required String title,
     required bool isLoading,
+    required bool hasCachedData,
     required VoidCallback onRefresh,
     required VoidCallback onAdd,
     required String addLabel,
   }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.iconAndText)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 16, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.iconAndText)),
+              ),
+              if (isLoading)
+                const SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.buttonBackground))
+              else
+                IconButton(
+                  icon: const Icon(Icons.refresh, color: AppColors.iconAndText, size: 20),
+                  onPressed: onRefresh, tooltip: 'Обновить',
+                ),
+              const SizedBox(width: 4),
+              FilledButton.icon(
+                onPressed: onAdd,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.buttonBackground,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.add, size: 18),
+                label: Text(addLabel, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              ),
+            ],
           ),
-          if (isLoading)
-            const SizedBox(width: 18, height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.buttonBackground))
-          else
-            IconButton(
-              icon: const Icon(Icons.refresh, color: AppColors.iconAndText, size: 20),
-              onPressed: onRefresh, tooltip: 'Обновить',
+        ),
+        if (isLoading && hasCachedData)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Row(
+              children: [
+                const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.buttonBackground)),
+                const SizedBox(width: 8),
+                Text('Обновление данных...', style: TextStyle(fontSize: 12, color: AppColors.iconAndText.withValues(alpha: 0.6))),
+              ],
             ),
-          const SizedBox(width: 4),
-          FilledButton.icon(
-            onPressed: onAdd,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.buttonBackground,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            icon: const Icon(Icons.add, size: 18),
-            label: Text(addLabel, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
+          )
+        else
+          const SizedBox(height: 8),
+      ],
     );
   }
 

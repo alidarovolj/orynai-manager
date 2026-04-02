@@ -10,6 +10,9 @@ import 'services/api_service.dart';
 import 'pages/manager_login_page.dart';
 import 'pages/manager_home_page.dart';
 
+/// Глобальный ключ навигатора — используется для редиректа на логин при 401.
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -74,6 +77,16 @@ Future<void> _initServicesInBackground() async {
   } catch (e) {
     debugPrint('AuthStateManager init error: $e');
   }
+
+  // Регистрируем обработчик 401: очищает сессию и редиректит на логин
+  ApiService.setUnauthorizedCallback(() {
+    final nav = appNavigatorKey.currentState;
+    if (nav == null) return;
+    nav.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const ManagerLoginPage()),
+      (_) => false,
+    );
+  });
 }
 
 class ManagerApp extends StatefulWidget {
@@ -97,6 +110,7 @@ class _ManagerAppState extends State<ManagerApp> {
     return RestartWidget(
       child: MaterialApp(
         title: 'Orynai Manager',
+        navigatorKey: appNavigatorKey,
         localizationsDelegates: context.localizationDelegates,
         supportedLocales: context.supportedLocales,
         locale: context.locale,
@@ -109,6 +123,12 @@ class _ManagerAppState extends State<ManagerApp> {
           scaffoldBackgroundColor: AppColors.background,
           useMaterial3: true,
           fontFamily: 'Manrope',
+          appBarTheme: const AppBarTheme(
+            scrolledUnderElevation: 0,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            elevation: 0,
+          ),
           textTheme: const TextTheme(
             displayLarge: TextStyle(fontFamily: 'Manrope'),
             displayMedium: TextStyle(fontFamily: 'Manrope'),

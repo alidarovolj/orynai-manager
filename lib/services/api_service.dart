@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:chucker_flutter/chucker_flutter.dart';
@@ -113,6 +114,23 @@ class ApiService {
     }
   }
 
+  // Вызывается при получении 401 — очищает сессию и редиректит на логин
+  Future<void> _handleUnauthorized() async {
+    debugPrint('🔒 [API] 401 Unauthorized — сессия истекла, перенаправление на логин');
+    await AuthStateManager().logout();
+
+    // Получаем навигатор через глобальный ключ, импортированный из main.dart
+    // Используем отложенный импорт через зарегистрированный колбэк
+    _onUnauthorizedCallback?.call();
+  }
+
+  /// Устанавливается из main.dart один раз при старте приложения.
+  static VoidCallback? _onUnauthorizedCallback;
+
+  static void setUnauthorizedCallback(VoidCallback callback) {
+    _onUnauthorizedCallback = callback;
+  }
+
   // GET запрос
   Future<dynamic> get(
     String path, {
@@ -171,6 +189,7 @@ class ApiService {
         }
         return json.decode(responseBody);
       } else {
+        if (response.statusCode == 401) await _handleUnauthorized();
         final errorBody = response.body.isNotEmpty
             ? json.decode(response.body)
             : {'error': 'Request failed with status ${response.statusCode}'};
@@ -265,6 +284,7 @@ class ApiService {
         // Возвращаем как есть (может быть Map или List)
         return decoded as Map<String, dynamic>;
       } else {
+        if (response.statusCode == 401) await _handleUnauthorized();
         final errorBody = response.body.isNotEmpty
             ? json.decode(response.body) as Map<String, dynamic>
             : {'error': 'Request failed with status ${response.statusCode}'};
@@ -355,6 +375,7 @@ class ApiService {
         // Ответ — число (например ID), строка или список — оборачиваем в Map
         return {'success': true, 'data': decoded};
       } else {
+        if (response.statusCode == 401) await _handleUnauthorized();
         final errorBody = response.body.isNotEmpty
             ? json.decode(response.body) as Map<String, dynamic>
             : {'error': 'Request failed with status ${response.statusCode}'};
@@ -456,6 +477,7 @@ class ApiService {
           return {'success': true, 'data': responseBody};
         }
       } else {
+        if (response.statusCode == 401) await _handleUnauthorized();
         final errorBody = response.body.isNotEmpty
             ? json.decode(response.body)
             : {'error': 'Request failed with status ${response.statusCode}'};

@@ -7,13 +7,15 @@
 
 ## Learned Workspace Facts
 
-- Flutter/Dart project targeting Android tablets (internal cemetery manager app, not public-facing).
-- Stack: Flutter, Yandex MapKit (`yandex_mapkit`), `geolocator` (GNSS), `sqflite` (local DB), `connectivity_plus`, `shared_preferences`.
+- Flutter/Dart project targeting Android tablets and iOS (internal cemetery manager app, not public-facing).
+- Stack: Flutter, `yandex_mapkit` (^4.2.1), `geolocator` (GNSS), `sqflite` (local DB), `connectivity_plus`, `shared_preferences`, `flutter_svg` (^2.0.10+1), `easy_localization` (^3.0.8), `http` (^1.2.0).
 - Offline-first architecture: local SQLite storage via `local_db_service.dart`, background sync via `sync_service.dart` when network is available.
-- Key pages: `manager_login_page.dart`, `manager_home_page.dart`, `manager_map_page.dart`, `grave_detail_page.dart`.
-- Key services: `api_service.dart`, `auth_service.dart`, `auth_state_manager.dart`, `cemetery_service.dart`, `local_db_service.dart`, `sync_service.dart`, `location_service.dart`.
+- Key pages: `manager_login_page.dart`, `manager_home_page.dart`, `manager_map_page.dart`, `grave_detail_page.dart`, `manager_profile_page.dart` (three sections: Личные данные, Заявки на захоронение, Обращения в администрацию; SharedPreferences caching).
+- Key services: `api_service.dart`, `auth_service.dart`, `auth_state_manager.dart`, `cemetery_service.dart`, `local_db_service.dart`, `sync_service.dart`, `location_service.dart`, `audit_service.dart`.
 - Styles/constants are in `lib/constants.dart` (`AppColors`, `AppSizes`) — do not modify without reason.
 - Phone number format: Kazakhstan (+7), mask pattern `+7 (___) ___-__-__`.
-- App label in AndroidManifest: `Orynai Manager`; permissions include `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `ACCESS_NETWORK_STATE`.
-- Grave statuses displayed on map: свободно, забронировано, захоронено, резерв.
-- `audit_service.dart` is a new untracked file in the workspace.
+- App label in AndroidManifest: `Orynai Manager`; UI title shown as "Кабинет Менеджера"; permissions include `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `ACCESS_NETWORK_STATE`.
+- Global AppBar theme in `main.dart` ThemeData: `scrolledUnderElevation: 0`, `surfaceTintColor: Colors.transparent` (prevents tint on scroll in Material 3).
+- Grave statuses displayed on map: свободно, забронировано, захоронено, резерв; selection by tap on map OR by number search.
+- Reusable `OrynaiAppBar` widget in `lib/widgets/orynai_app_bar.dart` — used across manager_map, manager_profile, place_booking, grave_detail pages; header background `rgba(250,247,238,0.85)`, border-bottom `rgba(0,0,0,0.08)`.
+- On HTTP 401 response, app redirects user to login page; `manager_home_page.dart` also fetches current user on load to verify auth state.
