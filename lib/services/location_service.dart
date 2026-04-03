@@ -46,9 +46,11 @@ class LocationService {
 
     _positionSubscription?.cancel();
     _positionSubscription = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
+      locationSettings: AndroidSettings(
         accuracy: LocationAccuracy.best,
         distanceFilter: 5,
+        forceLocationManager: true, // только GNSS (GPS/GLONASS), без Wi-Fi/Cell
+        intervalDuration: const Duration(seconds: 2),
       ),
     ).listen(
       (position) {
@@ -71,8 +73,9 @@ class LocationService {
 
     try {
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
+        locationSettings: AndroidSettings(
           accuracy: LocationAccuracy.best,
+          forceLocationManager: true, // только GNSS (GPS/GLONASS), без Wi-Fi/Cell
         ),
       );
       _lastPosition = position;

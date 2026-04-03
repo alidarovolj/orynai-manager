@@ -275,14 +275,15 @@ class ApiService {
       debugPrint('📥 [API] Response status: ${response.statusCode}');
       debugPrint('   Body: ${response.body}');
 
-      if (response.statusCode == 200) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseBody = response.body.trim();
         if (responseBody.isEmpty || responseBody == 'OK') {
           return {'success': true, 'data': responseBody};
         }
         final decoded = json.decode(responseBody);
         // Возвращаем как есть (может быть Map или List)
-        return decoded as Map<String, dynamic>;
+        if (decoded is Map<String, dynamic>) return decoded;
+        return {'data': decoded};
       } else {
         if (response.statusCode == 401) await _handleUnauthorized();
         final errorBody = response.body.isNotEmpty

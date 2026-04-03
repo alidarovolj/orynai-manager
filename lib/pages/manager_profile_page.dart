@@ -6,19 +6,23 @@ import '../services/auth_state_manager.dart';
 import '../services/api_service.dart';
 import '../widgets/orynai_app_bar.dart';
 
-enum _ProfileSection { personalData, burialRequests, appeals }
+enum ProfileSection { personalData, burialRequests, appeals }
 
 enum _ContentView { list, create }
 
 class ManagerProfilePage extends StatefulWidget {
-  const ManagerProfilePage({super.key});
+  final ProfileSection initialSection;
+  const ManagerProfilePage({
+    super.key,
+    this.initialSection = ProfileSection.personalData,
+  });
 
   @override
   State<ManagerProfilePage> createState() => _ManagerProfilePageState();
 }
 
 class _ManagerProfilePageState extends State<ManagerProfilePage> {
-  _ProfileSection _section = _ProfileSection.personalData;
+  late ProfileSection _section;
   final _auth = AuthStateManager();
   final _api = ApiService();
 
@@ -26,7 +30,6 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   List<Map<String, dynamic>> _requests = [];
   bool _loadingRequests = false;
   String? _requestsError;
-  Map<String, dynamic>? _selectedRequest;
   // _requestsView removed — create navigates to home
 
   // Appeals state
@@ -42,6 +45,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   @override
   void initState() {
     super.initState();
+    _section = widget.initialSection;
     _restoreCacheAndFetch();
   }
 
@@ -141,10 +145,9 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
     return [];
   }
 
-  void _selectSection(_ProfileSection s) {
+  void _selectSection(ProfileSection s) {
     setState(() {
       _section = s;
-      _selectedRequest = null;
       _appealsView = _ContentView.list;
     });
   }
@@ -213,17 +216,17 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
           const Text('КАБИНЕТ\nМЕНЕДЖЕРА\nКЛАДБИЩА',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.iconAndText, height: 1.2)),
           const SizedBox(height: 20),
-          _navItem('Личные данные', _ProfileSection.personalData, Icons.person_outline),
+          _navItem('Личные данные', ProfileSection.personalData, Icons.person_outline),
           const SizedBox(height: 4),
-          _navItem('Заявки на захоронение', _ProfileSection.burialRequests, Icons.assignment_outlined),
+          _navItem('Заявки на захоронение', ProfileSection.burialRequests, Icons.assignment_outlined),
           const SizedBox(height: 4),
-          _navItem('Обращения в администрацию', _ProfileSection.appeals, Icons.mail_outline),
+          _navItem('Обращения в администрацию', ProfileSection.appeals, Icons.mail_outline),
         ],
       ),
     );
   }
 
-  Widget _navItem(String title, _ProfileSection section, IconData icon) {
+  Widget _navItem(String title, ProfileSection section, IconData icon) {
     final active = _section == section;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
@@ -256,11 +259,11 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
 
   Widget _buildContent() {
     switch (_section) {
-      case _ProfileSection.personalData:
+      case ProfileSection.personalData:
         return _buildPersonalData();
-      case _ProfileSection.burialRequests:
+      case ProfileSection.burialRequests:
         return _buildBurialSection();
-      case _ProfileSection.appeals:
+      case ProfileSection.appeals:
         return _buildAppealsSection();
     }
   }
@@ -378,24 +381,16 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
     if (_loadingRequests && _requests.isEmpty) {
       return const Center(child: CircularProgressIndicator(color: AppColors.buttonBackground));
     }
+    return _buildRequestsList();
+  }
 
-    return LayoutBuilder(builder: (context, constraints) {
-      if (_selectedRequest != null) {
-        final listW = (constraints.maxWidth * 0.42).clamp(260.0, 400.0);
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(width: listW, child: _buildRequestsList()),
-            const VerticalDivider(width: 1),
-            Expanded(child: _RequestDetailPanel(
-              request: _selectedRequest!,
-              onClose: () => setState(() => _selectedRequest = null),
-            )),
-          ],
-        );
-      }
-      return _buildRequestsList();
-    });
+  void _openRequestDetail(Map<String, dynamic> request) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RequestDetailSheet(request: request),
+    );
   }
 
   Widget _buildRequestsList() {
@@ -408,7 +403,6 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
           hasCachedData: _requests.isNotEmpty,
           onRefresh: _loadBurialRequests,
           onAdd: () {
-            // Переходим на главный экран для выбора места на карте
             Navigator.of(context).popUntil((route) => route.isFirst);
           },
           addLabel: 'Создать заявку',
@@ -425,8 +419,8 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (_, i) => _RequestCard(
                 request: _requests[i],
-                isSelected: _selectedRequest != null && _selectedRequest!['id'] == _requests[i]['id'],
-                onTap: () => setState(() => _selectedRequest = _requests[i]),
+                isSelected: false,
+                onTap: () => _openRequestDetail(_requests[i]),
               ),
             ),
           ),
@@ -448,19 +442,27 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 16, 4),
+          padding: const EdgeInsets.fromLTRB(20, 20, 12, 4),
           child: Row(
             children: [
               Expanded(
-                child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.iconAndText)),
+                child: Text(title,
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.iconAndText)),
               ),
               if (isLoading)
                 const SizedBox(width: 18, height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.buttonBackground))
               else
-                IconButton(
-                  icon: const Icon(Icons.refresh, color: AppColors.iconAndText, size: 20),
-                  onPressed: onRefresh, tooltip: 'Обновить',
+                SizedBox(
+                  width: 36, height: 36,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.refresh, color: AppColors.iconAndText, size: 20),
+                    onPressed: onRefresh, tooltip: 'Обновить',
+                  ),
                 ),
               const SizedBox(width: 4),
               FilledButton.icon(
@@ -479,7 +481,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         ),
         if (isLoading && hasCachedData)
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Row(
               children: [
                 const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.buttonBackground)),
@@ -628,118 +630,185 @@ class _RequestCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Детальная панель заявки
+// Bottom sheet — детали заявки
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _RequestDetailPanel extends StatelessWidget {
+class _RequestDetailSheet extends StatelessWidget {
   final Map<String, dynamic> request;
-  final VoidCallback onClose;
-  const _RequestDetailPanel({required this.request, required this.onClose});
+  const _RequestDetailSheet({required this.request});
 
   @override
   Widget build(BuildContext context) {
-    final cemetery = request['cemetery_name']?.toString() ?? '—';
-    final sector = request['sector_number']?.toString() ?? '—';
-    final row = request['row_number']?.toString() ?? '—';
-    final graveNum = request['grave_number']?.toString() ?? '—';
-    final deceased = request['deceased'] as Map<String, dynamic>?;
-    final fullName = deceased?['full_name']?.toString() ?? '—';
-    final deathDate = deceased?['death_date']?.toString();
-    final birthDate = deceased?['birth_date']?.toString();
+    final cemetery   = request['cemetery_name']?.toString() ?? '—';
+    final sector     = request['sector_number']?.toString() ?? '—';
+    final row        = request['row_number']?.toString() ?? '—';
+    final graveNum   = request['grave_number']?.toString() ?? '—';
+    final deceased   = request['deceased'] as Map<String, dynamic>?;
+    final fullName   = deceased?['full_name']?.toString() ?? '—';
+    final inn        = deceased?['inn']?.toString();
+    final deathDate  = deceased?['death_date']?.toString();
+    final birthDate  = deceased?['birth_date']?.toString();
     final burialDate = request['burial_date']?.toString();
     final burialTime = request['burial_time']?.toString();
-    final status = request['status']?.toString() ?? '';
-    final id = request['id']?.toString() ?? '';
+    final expiresAt  = request['reservation_expires_at']?.toString();
+    final status     = request['status']?.toString() ?? '';
+    final id         = request['id']?.toString() ?? '';
     final requestNumber = request['request_number']?.toString() ?? 'ЗАХ-${id.padLeft(3, '0')}';
     final photosUrls = request['photos_urls'];
-    final List<String> photos = photosUrls is List ? photosUrls.map((e) => e.toString()).toList() : [];
+    final List<String> photos = photosUrls is List
+        ? photosUrls.map((e) => e.toString()).toList()
+        : [];
 
-    return Column(
-      children: [
+    final maxH = MediaQuery.of(context).size.height * 0.85;
+    final bottom = MediaQuery.of(context).padding.bottom;
+
+    return Container(
+      constraints: BoxConstraints(maxHeight: maxH),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Ручка
         Container(
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          width: 40, height: 4,
+          margin: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFDDDDDD),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        // Шапка
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 16, 12),
           child: Row(children: [
-            IconButton(icon: const Icon(Icons.close, color: AppColors.iconAndText), onPressed: onClose),
-            Expanded(child: Text(requestNumber, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.iconAndText))),
-            _StatusBadge(status: status),
-            const SizedBox(width: 8),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(requestNumber,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800,
+                        color: AppColors.iconAndText)),
+                const SizedBox(height: 4),
+                _StatusBadge(status: status),
+              ]),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: AppColors.iconAndText),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
           ]),
         ),
-        const Divider(height: 1),
-        Expanded(
+        const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+        // Контент
+        Flexible(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // Фото
               if (photos.isNotEmpty) ...[
                 SizedBox(
-                  height: 180,
+                  height: 160,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: photos.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 8),
                     itemBuilder: (_, i) => ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: Image.network(photos[i], width: 240, height: 180, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(width: 240, height: 180, color: Colors.grey.shade200,
+                      child: Image.network(photos[i], width: 220, height: 160, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                              width: 220, height: 160, color: Colors.grey.shade100,
                               child: const Icon(Icons.image_not_supported, color: Colors.grey))),
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
-              ] else ...[
-                Container(height: 140, decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
-                    child: Center(child: Icon(Icons.photo_library_outlined, size: 48, color: Colors.grey.shade400))),
-                const SizedBox(height: 20),
               ],
-              _detailSection('Место захоронения', [
-                _detailRow('Кладбище', cemetery),
-                _detailRow('Сектор', sector),
-                _detailRow('Ряд', row),
-                _detailRow('Место', graveNum, isLast: true),
+              // Место захоронения
+              _section('Место захоронения', [
+                _row('Кладбище', cemetery),
+                _row('Сектор', sector),
+                _row('Ряд', row),
+                _row('Место', graveNum, isLast: true),
               ]),
-              const SizedBox(height: 20),
-              _detailSection('Данные умершего', [
-                _detailRow('ФИО', fullName),
-                if (birthDate != null) _detailRow('Дата рождения', _fmtDate(birthDate)),
-                if (deathDate != null) _detailRow('Дата смерти', _fmtDate(deathDate), isLast: burialDate == null),
+              const SizedBox(height: 16),
+              // Данные умершего
+              _section('Данные умершего', [
+                _row('ФИО', fullName),
+                if (inn != null && inn.isNotEmpty) _row('ИИН', inn),
+                if (birthDate != null) _row('Дата рождения', _fmt(birthDate)),
+                if (deathDate != null)
+                  _row('Дата смерти', _fmt(deathDate), isLast: burialDate == null),
                 if (burialDate != null)
-                  _detailRow('Дата захоронения',
-                      burialTime != null ? '${_fmtDate(burialDate)}, $burialTime' : _fmtDate(burialDate),
+                  _row('Дата захоронения',
+                      burialTime != null && burialTime.isNotEmpty
+                          ? '${_fmt(burialDate)}, $burialTime'
+                          : _fmt(burialDate),
                       isLast: true),
               ]),
+              if (expiresAt != null && expiresAt.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8E1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFFE082)),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.timer_outlined, size: 16, color: Color(0xFF8D6E00)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text('Бронь действует до ${_fmt(expiresAt)}',
+                          style: const TextStyle(fontSize: 13, color: Color(0xFF8D6E00),
+                              fontWeight: FontWeight.w500)),
+                    ),
+                  ]),
+                ),
+              ],
             ]),
           ),
         ),
-      ],
+      ]),
     );
   }
 
-  Widget _detailSection(String title, List<Widget> rows) => Column(
+  Widget _section(String title, List<Widget> rows) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.iconAndText)),
+      Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+          color: AppColors.iconAndText)),
       const SizedBox(height: 10),
-      Container(padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: const Color(0xFFF4F0E7), borderRadius: BorderRadius.circular(12)),
-          child: Column(children: rows)),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4F0E7),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(children: rows),
+      ),
     ],
   );
 
-  Widget _detailRow(String label, String value, {bool isLast = false}) => Column(
+  Widget _row(String label, String value, {bool isLast = false}) => Column(
     children: [
-      Padding(padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(children: [
-            SizedBox(width: 140, child: Text(label, style: TextStyle(fontSize: 13, color: AppColors.iconAndText.withValues(alpha: 0.6)))),
-            Expanded(child: Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.iconAndText))),
-          ])),
-      if (!isLast) Divider(height: 1, color: Colors.grey.shade300),
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        child: Row(children: [
+          SizedBox(width: 130,
+              child: Text(label, style: TextStyle(fontSize: 13,
+                  color: AppColors.iconAndText.withValues(alpha: 0.55)))),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 14,
+              fontWeight: FontWeight.w600, color: AppColors.iconAndText))),
+        ]),
+      ),
+      if (!isLast) Divider(height: 1, color: Colors.grey.shade200),
     ],
   );
 
-  String _fmtDate(String iso) {
-    try { final dt = DateTime.parse(iso); return '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}'; }
-    catch (_) { return iso; }
+  String _fmt(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}';
+    } catch (_) { return iso; }
   }
 }
 

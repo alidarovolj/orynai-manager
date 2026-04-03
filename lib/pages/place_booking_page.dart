@@ -13,6 +13,7 @@ import '../models/grave.dart';
 import '../widgets/orynai_app_bar.dart';
 import '../services/api_service.dart';
 import '../services/auth_state_manager.dart';
+import 'manager_profile_page.dart';
 
 class PlaceBookingPage extends StatefulWidget {
   final Cemetery cemetery;
@@ -237,13 +238,28 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
   }
 
   void _showSuccess() {
-    showDialog<void>(
+    showModalBottomSheet<void>(
       context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        contentPadding: const EdgeInsets.all(28),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          28, 28, 28, 28 + MediaQuery.of(context).padding.bottom,
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 40, height: 4,
+            margin: const EdgeInsets.only(bottom: 24),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDDDDDD),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           Container(
             width: 64, height: 64,
             decoration: BoxDecoration(
@@ -255,29 +271,38 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
           ),
           const SizedBox(height: 16),
           const Text('Заявка отправлена!',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
                   color: AppColors.iconAndText)),
           const SizedBox(height: 10),
           Text(
             'Бронирование места на кладбище «${widget.cemetery.name}» создано. '
             'У вас есть $_bookingDays дня для оплаты.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: AppColors.iconAndText.withValues(alpha: 0.7)),
+            style: TextStyle(fontSize: 14, height: 1.5,
+                color: AppColors.iconAndText.withValues(alpha: 0.7)),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
           SizedBox(
             width: double.infinity,
-            height: 48,
+            height: 52,
             child: FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.buttonBackground,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               onPressed: () {
-                Navigator.of(context).pop(); // close dialog
-                Navigator.of(context).pop(); // back to map
+                Navigator.of(context).pop(); // закрыть bottom sheet
+                Navigator.of(context).pop(); // закрыть страницу бронирования
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ManagerProfilePage(
+                      initialSection: ProfileSection.burialRequests,
+                    ),
+                  ),
+                );
               },
-              child: const Text('Готово', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              child: const Text('Перейти к заявкам',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ),
         ]),
