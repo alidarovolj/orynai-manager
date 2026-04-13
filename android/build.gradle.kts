@@ -2,6 +2,9 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url = uri("https://artifactory.yandex.net/artifactory/yandex_mobile_sdk_flutter/")
+        }
     }
 }
 

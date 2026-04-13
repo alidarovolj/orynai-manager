@@ -518,7 +518,7 @@ packages:
     source: hosted
     version: "1.1.0"
   path_provider:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: path_provider
       sha256: "50c5dd5b6e1aaf6fb3a78b33f6aa3afca52bf903a8a5298f53101fdaee55bbcd"
@@ -962,14 +962,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.6.1"
-  yandex_mapkit:
+  yandex_maps_mapkit_lite:
     dependency: "direct main"
     description:
-      name: yandex_mapkit
-      sha256: "30a6f7e1d99871338071425a389c53491018602ee24be16e9cf63e640d57dda1"
+      name: yandex_maps_mapkit_lite
+      sha256: "136676d1b1e00ee6e7b97e0fd5d7d13803ed0958c484720a14fdb063a6ca806a"
       url: "https://pub.dev"
     source: hosted
-    version: "4.2.1"
+    version: "4.29.0-beta"
 sdks:
   dart: ">=3.9.2 <4.0.0"
   flutter: ">=3.35.0"

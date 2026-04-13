@@ -1,8 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart' hide Icon, TextStyle;
 import 'package:flutter/material.dart' as flutter;
-import 'package:yandex_mapkit/yandex_mapkit.dart';
+// yandex_maps_mapkit_lite — экспортирует Point, CameraPosition, Polygon, LinearRing,
+// PolygonMapObject, MapObjectTapListener, MapObject, MapWindow, UserLocationLayer
+import 'package:yandex_maps_mapkit_lite/mapkit.dart' hide Map;
+import 'package:yandex_maps_mapkit_lite/yandex_map.dart';
+import 'package:yandex_maps_mapkit_lite/mapkit_factory.dart' as mk_factory;
 import '../constants.dart';
 import '../models/cemetery.dart';
 import '../models/grave.dart';
@@ -40,12 +45,18 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
   final LocationService _locationService = LocationService();
   final AuditService _audit = AuditService();
 
-  YandexMapController? _mapController;
+  MapWindow? _mapWindow;
+  MapObjectCollection? _mapObjects;
+
   List<Grave> _graves = [];
   bool _isLoadingGraves = true;
   bool _isFromCache = false;
   Grave? _selectedGrave;
   final Map<int, PolygonMapObject> _gravePolygons = {};
+
+  // Сильные ссылки на tap-слушатели (MapKit держит их weak ref)
+  final List<_GraveTapListener> _tapListeners = [];
+
   bool _isLocating = false;
 
   // Поиск по номеру
@@ -65,6 +76,9 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
       details: widget.cemetery.name,
     );
     _loadGraves();
+    // Прогреваем GPS заранее — к моменту нажатия "Моё местоположение"
+    // GNSS-чип уже будет иметь фикс.
+    _locationService.startTracking();
   }
 
   @override
@@ -85,7 +99,7 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
     if (_usesExternalSelection &&
         oldWidget.selectedGrave?.id != widget.selectedGrave?.id) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _mapController != null) _updateMapObjects();
+        if (mounted && _mapWindow != null) _updateMapObjects();
       });
     }
   }
@@ -125,19 +139,9 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
         });
         _updateMapObjects();
 
-        if (_mapController != null) {
+        if (_mapWindow != null) {
           final (cLat, cLon) = _getCemeteryCenter();
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            if (!mounted || _mapController == null) return;
-            await _mapController!.moveCamera(
-              CameraUpdate.newCameraPosition(
-                CameraPosition(
-                  target: Point(latitude: cLat, longitude: cLon),
-                  zoom: 18.0,
-                ),
-              ),
-            );
-          });
+          _moveCamera(cLat, cLon, 18.0);
         }
       }
     } catch (e) {
@@ -167,33 +171,43 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
     }
   }
 
-  Future<void> _updateMapObjects() async {
-    if (_mapController == null) return;
+  void _updateMapObjects() {
+    final mapObjs = _mapObjects;
+    if (mapObjs == null) return;
+
+    // Очищаем все объекты и tap-слушатели
+    mapObjs.clear();
     _gravePolygons.clear();
+    _tapListeners.clear();
 
     final selectedId = _effectiveSelected?.id;
 
     for (final grave in _graves) {
-      if (grave.polygonData.coordinates.isNotEmpty) {
-        final isSelected = grave.id == selectedId;
-        final polygon = PolygonMapObject(
-          mapId: MapObjectId('grave_${grave.id}'),
-          polygon: Polygon(
-            outerRing: LinearRing(
-              points: grave.polygonData.coordinates
-                  .map((c) => Point(latitude: c[1], longitude: c[0]))
-                  .toList(),
-            ),
-            innerRings: const [],
-          ),
-          strokeColor:
-              isSelected ? flutter.Colors.red : flutter.Colors.black,
-          strokeWidth: isSelected ? 4.0 : 2.0,
-          fillColor: _graveColor(grave),
-          onTap: (_, __) => _onGraveTap(grave),
-        );
-        _gravePolygons[grave.id] = polygon;
-      }
+      if (grave.polygonData.coordinates.isEmpty) continue;
+
+      final isSelected = grave.id == selectedId;
+      final points = grave.polygonData.coordinates
+          .map((c) => Point(latitude: c[1], longitude: c[0]))
+          .toList();
+
+      final polygon = mapObjs.addPolygon(
+        Polygon(LinearRing(points), []),
+      );
+
+      polygon.fillColor = _graveColor(grave);
+      polygon.strokeColor =
+          isSelected ? flutter.Colors.red : flutter.Colors.black;
+      polygon.strokeWidth = isSelected ? 4.0 : 2.0;
+
+      // Создаём и сохраняем tap-слушатель (strong ref!)
+      final listener = _GraveTapListener(
+        grave: grave,
+        onTap: _onGraveTap,
+      );
+      _tapListeners.add(listener);
+      polygon.addTapListener(listener);
+
+      _gravePolygons[grave.id] = polygon;
     }
 
     if (mounted) setState(() {});
@@ -204,24 +218,24 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
       widget.onSelectedGraveChanged!(grave);
       return;
     }
-    setState(() {
-      if (_selectedGrave != null &&
-          _gravePolygons.containsKey(_selectedGrave!.id)) {
-        final prev = _gravePolygons[_selectedGrave!.id]!;
-        _gravePolygons[_selectedGrave!.id] = prev.copyWith(
-          strokeColor: flutter.Colors.black,
-          strokeWidth: 2.0,
-        );
+
+    // Сбросить выделение предыдущего
+    if (_selectedGrave != null) {
+      final prev = _gravePolygons[_selectedGrave!.id];
+      if (prev != null) {
+        prev.strokeColor = flutter.Colors.black;
+        prev.strokeWidth = 2.0;
       }
-      _selectedGrave = grave;
-      if (_gravePolygons.containsKey(grave.id)) {
-        final cur = _gravePolygons[grave.id]!;
-        _gravePolygons[grave.id] = cur.copyWith(
-          strokeColor: flutter.Colors.red,
-          strokeWidth: 4.0,
-        );
-      }
-    });
+    }
+
+    // Выделить новый
+    final cur = _gravePolygons[grave.id];
+    if (cur != null) {
+      cur.strokeColor = flutter.Colors.red;
+      cur.strokeWidth = 4.0;
+    }
+
+    setState(() => _selectedGrave = grave);
   }
 
   (double, double) _getCemeteryCenter() {
@@ -242,19 +256,23 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
     return (43.25, 76.95);
   }
 
+  void _moveCamera(double lat, double lon, double zoom) {
+    _mapWindow?.map.move(
+      CameraPosition(
+        Point(latitude: lat, longitude: lon),
+        zoom: zoom,
+        azimuth: 0.0,
+        tilt: 0.0,
+      ),
+    );
+  }
+
   Future<void> _centerOnMyLocation() async {
     setState(() => _isLocating = true);
     try {
       final pos = await _locationService.getCurrentPosition();
-      if (pos != null && _mapController != null) {
-        await _mapController!.moveCamera(
-          CameraUpdate.newCameraPosition(
-            CameraPosition(
-              target: Point(latitude: pos.latitude, longitude: pos.longitude),
-              zoom: 19.0,
-            ),
-          ),
-        );
+      if (pos != null && _mapWindow != null) {
+        _moveCamera(pos.latitude, pos.longitude, 19.0);
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const flutter.SnackBar(
@@ -322,14 +340,7 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
         sumLat += c[1];
       }
       final n = grave.polygonData.coordinates.length;
-      _mapController?.moveCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: Point(latitude: sumLat / n, longitude: sumLon / n),
-            zoom: 21.0,
-          ),
-        ),
-      );
+      _moveCamera(sumLat / n, sumLon / n, 21.0);
     }
   }
 
@@ -359,6 +370,27 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
     }
   }
 
+  // ─── Инициализация карты ──────────────────────────────────────────────────
+
+  void _onMapCreated(MapWindow mapWindow) {
+    _mapWindow = mapWindow;
+    _mapObjects = mapWindow.map.mapObjects;
+
+    final (lat, lon) = _getCemeteryCenter();
+    _moveCamera(lat, lon, 18.0);
+
+    // Слой геолокации пользователя
+    try {
+      final userLayer = mk_factory.mapkit.createUserLocationLayer(mapWindow);
+      userLayer.setVisible(true);
+      userLayer.headingModeActive = true;
+    } catch (e) {
+      debugPrint('User location layer error: $e');
+    }
+
+    if (!_isLoadingGraves) _updateMapObjects();
+  }
+
   flutter.Widget _buildMapStack(flutter.BuildContext context) {
     return flutter.LayoutBuilder(
       builder: (context, constraints) {
@@ -376,33 +408,13 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
         return flutter.Stack(
           fit: StackFit.expand,
           children: [
-            // Карта на весь экран
-            YandexMap(
-              cameraBounds: const CameraBounds(minZoom: 10, maxZoom: 22),
-              onMapCreated: (YandexMapController controller) async {
-                _mapController = controller;
-                final (lat, lon) = _getCemeteryCenter();
-                await _mapController!.moveCamera(
-                  CameraUpdate.newCameraPosition(
-                    CameraPosition(
-                      target: Point(latitude: lat, longitude: lon),
-                      zoom: 18.0,
-                    ),
-                  ),
-                );
-                if (!_isLoadingGraves) _updateMapObjects();
-                try {
-                  await _mapController!.toggleUserLayer(
-                    visible: true,
-                    headingEnabled: true,
-                    autoZoomEnabled: false,
-                  );
-                } catch (e) {
-                  debugPrint('User location layer: $e');
-                }
-              },
-              mapObjects: [..._gravePolygons.values],
-            ),
+            // Карта на весь экран — только Android; на iOS MapKit недоступен
+            if (Platform.isAndroid)
+              YandexMap(onMapCreated: _onMapCreated)
+            else
+              const flutter.Center(
+                child: flutter.Text('Карта доступна только на Android'),
+              ),
 
             // Индикатор загрузки
             if (_isLoadingGraves)
@@ -689,10 +701,15 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
                         ),
                       ),
                     // «Ничего не найдено» — только когда запрос непустой
-                    if (_searchController.text.isNotEmpty && _searchResults.isEmpty && !_isLoadingGraves)
+                    if (_searchController.text.isNotEmpty &&
+                        _searchResults.isEmpty &&
+                        !_isLoadingGraves)
                       flutter.Container(
                         margin: const flutter.EdgeInsets.fromLTRB(12, 4, 12, 0),
-                        padding: const flutter.EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const flutter.EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         decoration: flutter.BoxDecoration(
                           color: flutter.Colors.white,
                           borderRadius: flutter.BorderRadius.circular(12),
@@ -725,7 +742,6 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
                 ),
               ),
             ),
-
 
             // Кнопка моего местоположения
             flutter.Positioned(
@@ -831,17 +847,16 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
             flutter.IconButton(
               icon: const flutter.Icon(flutter.Icons.close, size: 20),
               onPressed: () {
-                setState(() {
-                  final sel = _selectedGrave;
-                  if (sel != null && _gravePolygons.containsKey(sel.id)) {
-                    final p = _gravePolygons[sel.id]!;
-                    _gravePolygons[sel.id] = p.copyWith(
-                      strokeColor: flutter.Colors.black,
-                      strokeWidth: 2.0,
-                    );
+                // Сбросить выделение полигона
+                final sel = _selectedGrave;
+                if (sel != null) {
+                  final p = _gravePolygons[sel.id];
+                  if (p != null) {
+                    p.strokeColor = flutter.Colors.black;
+                    p.strokeWidth = 2.0;
                   }
-                  _selectedGrave = null;
-                });
+                }
+                setState(() => _selectedGrave = null);
               },
               padding: flutter.EdgeInsets.zero,
               constraints: const flutter.BoxConstraints(),
@@ -917,6 +932,23 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
     );
   }
 }
+
+// ─── Tap-слушатель для полигона могилы ────────────────────────────────────────
+
+class _GraveTapListener implements MapObjectTapListener {
+  final Grave grave;
+  final void Function(Grave) onTap;
+
+  _GraveTapListener({required this.grave, required this.onTap});
+
+  @override
+  bool onMapObjectTap(MapObject mapObject, Point point) {
+    onTap(grave);
+    return true;
+  }
+}
+
+// ─── Вспомогательные виджеты ──────────────────────────────────────────────────
 
 class _MapButton extends flutter.StatelessWidget {
   final flutter.IconData icon;

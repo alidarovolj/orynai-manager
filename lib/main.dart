@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:chucker_flutter/chucker_flutter.dart';
+import 'package:yandex_maps_mapkit_lite/init.dart' as mapkit_init;
 import 'constants.dart';
 import 'widgets/restart_widget.dart';
 import 'services/auth_state_manager.dart';
@@ -46,6 +48,19 @@ void main() async {
   } catch (e) {
     debugPrint('.env not found, using defaults');
     dotenv.env['API_URL'] = 'https://stage.ripservice.kz';
+  }
+
+  // Инициализация Yandex MapKit — только Android.
+  // На iOS-симуляторе 4.29.0-beta крашится в setPreinitializationOptions (abort),
+  // поэтому iOS исключён намеренно (приложение предназначено только для Android).
+  if (Platform.isAndroid) {
+    try {
+      await mapkit_init.initMapkit(
+        apiKey: dotenv.env['YANDEX_MAPKIT_KEY'] ?? '',
+      );
+    } catch (e) {
+      debugPrint('MapKit init error: $e');
+    }
   }
 
   EasyLocalization.logger.enableLevels = [];

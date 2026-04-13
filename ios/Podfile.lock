@@ -23,10 +23,10 @@ PODS:
   - webview_flutter_wkwebview (0.0.1):
     - Flutter
     - FlutterMacOS
-  - yandex_mapkit (0.0.1):
+  - yandex_maps_mapkit_lite (1.0.0):
     - Flutter
-    - YandexMapsMobile (= 4.22.0-full)
-  - YandexMapsMobile (4.22.0-full)
+    - YandexMapsMobile (= 4.29.0-beta-lite-flutter)
+  - YandexMapsMobile (4.29.0-beta-lite-flutter)
 
 DEPENDENCIES:
   - connectivity_plus (from `.symlinks/plugins/connectivity_plus/ios`)
@@ -39,7 +39,7 @@ DEPENDENCIES:
   - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
   - webview_flutter_wkwebview (from `.symlinks/plugins/webview_flutter_wkwebview/darwin`)
-  - yandex_mapkit (from `.symlinks/plugins/yandex_mapkit/ios`)
+  - yandex_maps_mapkit_lite (from `.symlinks/plugins/yandex_maps_mapkit_lite/ios`)
 
 SPEC REPOS:
   trunk:
@@ -66,8 +66,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/url_launcher_ios/ios"
   webview_flutter_wkwebview:
     :path: ".symlinks/plugins/webview_flutter_wkwebview/darwin"
-  yandex_mapkit:
-    :path: ".symlinks/plugins/yandex_mapkit/ios"
+  yandex_maps_mapkit_lite:
+    :path: ".symlinks/plugins/yandex_maps_mapkit_lite/ios"
 
 SPEC CHECKSUMS:
   connectivity_plus: 2a701ffec2c0ae28a48cf7540e279787e77c447d
@@ -80,8 +80,8 @@ SPEC CHECKSUMS:
   sqflite_darwin: 5a7236e3b501866c1c9befc6771dfd73ffb8702d
   url_launcher_ios: bb13df5870e8c4234ca12609d04010a21be43dfa
   webview_flutter_wkwebview: 29eb20d43355b48fe7d07113835b9128f84e3af4
-  yandex_mapkit: 37d92c2cfa973a9f930d02ae196c157616c9574e
-  YandexMapsMobile: 27e6e45425bb61f0be2dbc2bf02d4e64926691a9
+  yandex_maps_mapkit_lite: dd353151d4b0ce1e928f70c2ada2b033bf4af526
+  YandexMapsMobile: 9a10020496173b07f391f94057a847cd60815d98
 
 PODFILE CHECKSUM: d662627f436c6f7e0fefe75a311696dba357087f
 

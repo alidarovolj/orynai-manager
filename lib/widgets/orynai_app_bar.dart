@@ -64,7 +64,7 @@ class OrynaiAppBar extends StatelessWidget implements PreferredSizeWidget {
                   )
                 : null,
             title: Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize: MainAxisSize.max,
               children: [
                 if (showLogo) ...[
                   SvgPicture.asset(
@@ -78,13 +78,17 @@ class OrynaiAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                   const SizedBox(width: 10),
                 ],
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.iconAndText,
-                    letterSpacing: 0,
+                Flexible(
+                  child: Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.iconAndText,
+                      letterSpacing: 0,
+                    ),
                   ),
                 ),
               ],

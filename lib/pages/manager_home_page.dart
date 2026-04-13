@@ -45,7 +45,6 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
   bool _isLoading = true; // true только пока кэш полностью пуст
   bool _isRefreshing = false; // true во время фонового обновления с сервера
   String? _refreshError; // ошибка последнего обновления с сервера
-  DateTime? _cachedAt; // когда последний раз получили данные
   bool _isSyncing = false;
 
   @override
@@ -144,12 +143,10 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
   Future<void> _loadCemeteries() async {
     // 1. Показываем кэш немедленно
     final cached = await _cemeteryService.getCachedCemeteries();
-    final cachedAt = await _cemeteryService.getCemeteriesCachedAt();
     if (mounted) {
       setState(() {
         if (cached.isNotEmpty) {
           _cemeteries = cached;
-          _cachedAt = cachedAt;
           _isLoading = false; // есть хоть что-то — убираем полный лоадер
           _syncSelectionWithList();
         }
@@ -164,7 +161,6 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
       if (mounted) {
         setState(() {
           _cemeteries = fresh;
-          _cachedAt = DateTime.now();
           _isLoading = false;
           _isRefreshing = false;
           _refreshError = null;
@@ -196,7 +192,6 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
       if (mounted) {
         setState(() {
           _cemeteries = fresh;
-          _cachedAt = DateTime.now();
           _isRefreshing = false;
           _refreshError = null;
           _syncSelectionWithList();
@@ -555,9 +550,13 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final w = constraints.maxWidth;
-        final listW = (w * 0.36)
-            .clamp(200.0, min(400.0, w * 0.46))
-            .toDouble();
+        // На узких экранах (телефон) показываем только карту
+        if (w < 500) {
+          return _buildMapPanel();
+        }
+        final maxListW = min(400.0, w * 0.42);
+        final minListW = min(200.0, maxListW);
+        final listW = (w * 0.36).clamp(minListW, maxListW);
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
