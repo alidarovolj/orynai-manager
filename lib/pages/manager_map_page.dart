@@ -14,6 +14,7 @@ import '../models/grave.dart';
 import '../services/cemetery_service.dart';
 import '../services/location_service.dart';
 import '../services/audit_service.dart';
+import '../main.dart' show mapkitReady;
 import 'grave_detail_page.dart';
 
 class ManagerMapPage extends StatefulWidget {
@@ -408,9 +409,22 @@ class _ManagerMapPageState extends State<ManagerMapPage> {
         return flutter.Stack(
           fit: StackFit.expand,
           children: [
-            // Карта на весь экран — только Android; на iOS MapKit недоступен
+            // Карта на весь экран — только Android; на iOS MapKit недоступен.
+            // ValueListenableBuilder ждёт готовности MapKit прежде чем рендерить виджет.
             if (Platform.isAndroid)
-              YandexMap(onMapCreated: _onMapCreated)
+              ValueListenableBuilder<bool>(
+                valueListenable: mapkitReady,
+                builder: (context, ready, _) {
+                  if (!ready) {
+                    return const flutter.Center(
+                      child: flutter.CircularProgressIndicator(
+                        color: AppColors.buttonBackground,
+                      ),
+                    );
+                  }
+                  return YandexMap(onMapCreated: _onMapCreated);
+                },
+              )
             else
               const flutter.Center(
                 child: flutter.Text('Карта доступна только на Android'),

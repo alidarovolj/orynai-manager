@@ -1,10 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:yandex_maps_mapkit_lite/init.dart' as mapkit_init;
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:chucker_flutter/chucker_flutter.dart';
-import 'package:yandex_maps_mapkit_lite/init.dart' as mapkit_init;
 import 'constants.dart';
 import 'widgets/restart_widget.dart';
 import 'services/auth_state_manager.dart';
@@ -14,6 +16,13 @@ import 'pages/manager_home_page.dart';
 
 /// Глобальный ключ навигатора — используется для редиректа на логин при 401.
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
+/// Готовность Yandex MapKit — карта рендерится только когда true.
+final ValueNotifier<bool> mapkitReady = ValueNotifier(false);
+
+/// Результат проверки сессии до runApp() — чтобы первый кадр
+/// сразу показал нужный экран, не ожидая завершения async _checkAuth().
+bool _preAuthResult = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,18 +59,11 @@ void main() async {
     dotenv.env['API_URL'] = 'https://stage.ripservice.kz';
   }
 
-  // Инициализация Yandex MapKit — только Android.
-  // На iOS-симуляторе 4.29.0-beta крашится в setPreinitializationOptions (abort),
-  // поэтому iOS исключён намеренно (приложение предназначено только для Android).
-  if (Platform.isAndroid) {
-    try {
-      await mapkit_init.initMapkit(
-        apiKey: dotenv.env['YANDEX_MAPKIT_KEY'] ?? '',
-      );
-    } catch (e) {
-      debugPrint('MapKit init error: $e');
-    }
-  }
+  // Проверяем сессию до runApp() — SharedPreferences только читает кэш,
+  // занимает < 5ms. Первый кадр сразу рендерит нужный экран без спиннера.
+  try {
+    _preAuthResult = await AuthStateManager().initialize();
+  } catch (_) {}
 
   EasyLocalization.logger.enableLevels = [];
 
@@ -77,10 +79,35 @@ void main() async {
     ),
   );
 
+  // Инициализация Yandex MapKit — только Android, запускаем после runApp()
+  // чтобы не блокировать старт Flutter и VM service.
   _initServicesInBackground();
 }
 
 Future<void> _initServicesInBackground() async {
+  if (Platform.isAndroid) {
+    // initMapkit содержит синхронный leaf-FFI вызов (_init), который блокирует
+    // Dart изолят. Ждём postFrameCallback — гарантирует что первый кадр
+    // (экран входа / главный экран) уже отрисован до блокирующего вызова.
+    final firstFrame = Completer<void>();
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!firstFrame.isCompleted) firstFrame.complete();
+    });
+    await firstFrame.future;
+
+    try {
+      await mapkit_init.initMapkit(
+        apiKey: dotenv.env['YANDEX_MAPKIT_KEY'] ?? '',
+        locale: 'ru_RU',
+      );
+      debugPrint('[MapKit] initialized');
+    } catch (e) {
+      debugPrint('[MapKit] init error: $e');
+    } finally {
+      mapkitReady.value = true;
+    }
+  }
+
   try {
     await ApiService().initialize();
   } catch (e) {
@@ -178,45 +205,15 @@ class _AppEntryPoint extends StatefulWidget {
 }
 
 class _AppEntryPointState extends State<_AppEntryPoint> {
-  bool _checking = true;
-  bool _isAuthenticated = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkAuth();
-  }
-
-  Future<void> _checkAuth() async {
-    try {
-      final isAuth = await AuthStateManager().initialize();
-      setState(() {
-        _isAuthenticated = isAuth;
-        _checking = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isAuthenticated = false;
-        _checking = false;
-      });
-    }
-  }
+  // Auth уже проверен в main() через _preAuthResult — первый кадр
+  // рендерится без спиннера, не блокируется leaf-FFI от initMapkit.
+  late bool _isAuthenticated = _preAuthResult;
 
   @override
   Widget build(BuildContext context) {
-    if (_checking) {
-      return const Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(
-          child: CircularProgressIndicator(color: AppColors.buttonBackground),
-        ),
-      );
-    }
-
     if (_isAuthenticated) {
       return const ManagerHomePage();
     }
-
     return const ManagerLoginPage();
   }
 }

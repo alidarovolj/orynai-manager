@@ -5,21 +5,25 @@ import 'api_service.dart';
 
 /// Действия менеджера, подлежащие аудиту
 enum AuditAction {
-  openMap,            // открыл карту кладбища
-  viewGrave,          // открыл карточку места
-  saveGraveRecord,    // сохранил данные захоронения
-  fixCoordinates,     // зафиксировал GPS-координаты
-  login,              // выполнил вход
+  openMap,              // открыл карту кладбища
+  viewGrave,            // открыл карточку места
+  saveGraveRecord,      // сохранил данные захоронения
+  fixCoordinates,       // зафиксировал GPS-координаты
+  login,                // выполнил вход
+  openProfile,          // открыл профиль менеджера
+  createBurialRequest,  // создал заявку на захоронение
 }
 
 extension AuditActionName on AuditAction {
   String get value {
     switch (this) {
-      case AuditAction.openMap:         return 'open_map';
-      case AuditAction.viewGrave:       return 'view_grave';
-      case AuditAction.saveGraveRecord: return 'save_grave_record';
-      case AuditAction.fixCoordinates:  return 'fix_coordinates';
-      case AuditAction.login:           return 'login';
+      case AuditAction.openMap:             return 'open_map';
+      case AuditAction.viewGrave:           return 'view_grave';
+      case AuditAction.saveGraveRecord:     return 'save_grave_record';
+      case AuditAction.fixCoordinates:      return 'fix_coordinates';
+      case AuditAction.login:               return 'login';
+      case AuditAction.openProfile:         return 'open_profile';
+      case AuditAction.createBurialRequest: return 'create_burial_request';
     }
   }
 }

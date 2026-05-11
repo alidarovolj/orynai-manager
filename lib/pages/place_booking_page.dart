@@ -12,6 +12,7 @@ import '../models/cemetery.dart';
 import '../models/grave.dart';
 import '../widgets/orynai_app_bar.dart';
 import '../services/api_service.dart';
+import '../services/audit_service.dart';
 import '../services/auth_state_manager.dart';
 import 'manager_profile_page.dart';
 
@@ -31,6 +32,7 @@ class PlaceBookingPage extends StatefulWidget {
 
 class _PlaceBookingPageState extends State<PlaceBookingPage> {
   final _api = ApiService();
+  final _audit = AuditService();
 
   final _iinController       = TextEditingController();
   final _nameController      = TextEditingController();
@@ -219,6 +221,12 @@ class _PlaceBookingPageState extends State<PlaceBookingPage> {
         inn: iin,
         graveId: widget.grave.id,
         deathCertUrl: null,
+      );
+      await _audit.log(
+        action: AuditAction.createBurialRequest,
+        entityType: 'grave',
+        entityId: widget.grave.id,
+        details: 'cemetery=${widget.cemetery.id},grave=${widget.grave.fullNumber},iin=$iin',
       );
       if (!mounted) return;
       _showSuccess();

@@ -8,6 +8,7 @@ import '../widgets/orynai_app_bar.dart';
 import '../models/cemetery.dart';
 import '../models/grave.dart';
 import '../services/api_service.dart';
+import '../services/audit_service.dart';
 import '../services/cemetery_service.dart';
 import '../services/auth_state_manager.dart';
 import '../services/location_service.dart';
@@ -31,6 +32,7 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
   final SyncService _syncService = SyncService();
   final ApiService _apiService = ApiService();
   final LocationService _locationService = LocationService();
+  final AuditService _audit = AuditService();
 
   // GPS для расчёта расстояния до кладбищ
   double? _userLat, _userLon;
@@ -299,6 +301,7 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
             onSelected: (val) {
               if (val == 'logout') _logout();
               if (val == 'profile') {
+                _audit.log(action: AuditAction.openProfile);
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const ManagerProfilePage()),
@@ -706,16 +709,24 @@ class _ManagerHomePageState extends State<ManagerHomePage> {
                             )
                         : null,
                     onOpenCard: graveHere != null
-                        ? () => Navigator.of(context)
-                            .push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => GraveDetailPage(
-                                  cemetery: cemetery,
-                                  grave: graveHere,
-                                ),
-                              ),
-                            )
-                            .then((_) => _loadCemeteries())
+                        ? () {
+                            _audit.log(
+                              action: AuditAction.viewGrave,
+                              entityType: 'grave',
+                              entityId: graveHere.id,
+                              details: graveHere.fullNumber,
+                            );
+                            Navigator.of(context)
+                                .push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => GraveDetailPage(
+                                      cemetery: cemetery,
+                                      grave: graveHere,
+                                    ),
+                                  ),
+                                )
+                                .then((_) => _loadCemeteries());
+                          }
                         : null,
                     onCloseGrave: graveHere != null
                         ? () => setState(() => _selectedGrave = null)

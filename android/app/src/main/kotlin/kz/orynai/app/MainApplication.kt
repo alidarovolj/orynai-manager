@@ -1,12 +1,13 @@
 package kz.orynai.app
 
 import android.app.Application
-import com.yandex.mapkit.MapKitFactory
 
 class MainApplication: Application() {
   override fun onCreate() {
     super.onCreate()
-    MapKitFactory.setLocale("ru_RU")
-    MapKitFactory.setApiKey("ec23256b-90b2-48da-842f-3c4cf0b6767f")
+    // Инициализация MapKit полностью делегирована Flutter-плагину (initMapkit).
+    // yandex_maps_mapkit_lite 4.x использует Runtime/FFI API — вызовы
+    // MapKitFactory.setApiKey/setLocale из старого SDK 3.x несовместимы
+    // и мешают авторизации тайлов.
   }
 }

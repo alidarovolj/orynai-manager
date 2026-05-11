@@ -163,8 +163,8 @@ class LocalDbService {
     final db = await database;
     final rows = await db.query(
       'burial_records',
-      where: 'sync_status IN (?, ?)',
-      whereArgs: [SyncStatus.local.name, SyncStatus.pending.name],
+      where: 'sync_status IN (?, ?, ?)',
+      whereArgs: [SyncStatus.local.name, SyncStatus.pending.name, SyncStatus.error.name],
       orderBy: 'updated_at ASC',
     );
     return rows.map(BurialRecord.fromMap).toList();

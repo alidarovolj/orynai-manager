@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../constants.dart';
 import '../models/user.dart';
+import '../services/audit_service.dart';
 import '../services/auth_service.dart';
 import '../services/auth_state_manager.dart';
 import 'manager_home_page.dart';
@@ -181,6 +182,10 @@ class _ManagerLoginPageState extends State<ManagerLoginPage> {
           iin: data['iin']?.toString(),
         );
         await AuthStateManager().setUser(user);
+        await AuditService().log(
+          action: AuditAction.login,
+          details: user.phone,
+        );
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const ManagerHomePage()),
